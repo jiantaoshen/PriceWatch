@@ -2,7 +2,6 @@ using PriceWatch.Api.DTOs;
 using PriceWatch.Api.Models;
 using PriceWatch.Api.Services;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 
@@ -10,31 +9,46 @@ var builder = WebApplication.CreateBuilder(args);
 // Services
 // ============================================================
 
+builder.Services.AddControllers();
+
 builder.Services.AddSingleton<AppPaths>();
 builder.Services.AddSingleton<ScraperRunner>();
 builder.Services.AddSingleton<ScheduleService>();
 builder.Services.AddSingleton<ProductConfigService>();
 builder.Services.AddSingleton<EmailSettingsService>();
 
+
+// ============================================================
+// Local AI
+// ============================================================
+
+builder.Services.AddHttpClient<IAiService, AiService>(client =>
+{
+    var baseUrl =
+        builder.Configuration["Ai:BaseUrl"]
+        ?? "http://127.0.0.1:8000/";
+
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = Timeout.InfiniteTimeSpan;
+});
+
+
 // ============================================================
 // Development CORS
 //
-// Production uses the same ASP.NET Core origin for both
-// React and /api, so CORS is only needed while using Vite.
+// Production uses the same ASP.NET Core origin for React and
+// /api, so CORS is only needed while using Vite.
 // ============================================================
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(
-        "Frontend",
-        policy =>
-        {
-            policy
-                .WithOrigins("http://localhost:5173")
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        }
-    );
+    options.AddPolicy("Frontend", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
 });
 
 
@@ -58,224 +72,178 @@ if (app.Environment.IsDevelopment())
 // Health
 // ============================================================
 
-app.MapGet(
-    "/api/health",
-    () =>
+app.MapGet("/api/health", () =>
+{
+    return Results.Ok(new
     {
-        return Results.Ok(
-            new
-            {
-                status = "ok",
-                service = "PriceWatch.Api",
-                timestamp = DateTimeOffset.UtcNow,
-            }
-        );
-    }
-);
+        status = "ok",
+        service = "PriceWatch.Api",
+        timestamp = DateTimeOffset.UtcNow,
+    });
+});
 
 
 // ============================================================
 // Latest product price data
 // ============================================================
 
-app.MapGet(
-    "/api/latest",
-    (AppPaths paths) =>
+app.MapGet("/api/latest", (AppPaths paths) =>
+{
+    if (!File.Exists(paths.LatestFile))
     {
-        if (!File.Exists(paths.LatestFile))
+        return Results.Ok(new
         {
-            return Results.Ok(
-                new
-                {
-                    period = "",
-                    generated_at = "",
-                    data = Array.Empty<object>(),
-                }
-            );
-        }
-
-        return Results.File(
-            paths.LatestFile,
-            contentType: "application/json"
-        );
+            period = "",
+            generated_at = "",
+            data = Array.Empty<object>(),
+        });
     }
-);
+
+    return Results.File(
+        paths.LatestFile,
+        contentType: "application/json"
+    );
+});
 
 
 // ============================================================
 // History index
 // ============================================================
 
-app.MapGet(
-    "/api/history",
-    (AppPaths paths) =>
+app.MapGet("/api/history", (AppPaths paths) =>
+{
+    var indexFile =
+        Path.Combine(paths.HistoryDirectory, "index.json");
+
+    if (!File.Exists(indexFile))
     {
-        var indexFile = Path.Combine(
-            paths.HistoryDirectory,
-            "index.json"
-        );
-
-        if (!File.Exists(indexFile))
+        return Results.Ok(new
         {
-            return Results.Ok(
-                new
-                {
-                    periods = Array.Empty<string>(),
-                }
-            );
-        }
-
-        return Results.File(
-            indexFile,
-            contentType: "application/json"
-        );
+            periods = Array.Empty<string>(),
+        });
     }
-);
+
+    return Results.File(
+        indexFile,
+        contentType: "application/json"
+    );
+});
 
 
 // ============================================================
 // History period
 // ============================================================
 
-app.MapGet(
-    "/api/history/{period}",
-    (string period, AppPaths paths) =>
+app.MapGet("/api/history/{period}", (string period, AppPaths paths) =>
+{
+    if (
+        string.IsNullOrWhiteSpace(period) ||
+        Path.GetFileName(period) != period ||
+        period.Contains('/') ||
+        period.Contains('\\')
+    )
     {
-        if (
-            string.IsNullOrWhiteSpace(period) ||
-            Path.GetFileName(period) != period ||
-            period.Contains('/') ||
-            period.Contains('\\')
-        )
+        return Results.BadRequest(new
         {
-            return Results.BadRequest(
-                new
-                {
-                    error = "Invalid history period",
-                }
-            );
-        }
-
-        var historyFile = Path.Combine(
-            paths.HistoryDirectory,
-            $"{period}.json"
-        );
-
-        if (!File.Exists(historyFile))
-        {
-            return Results.NotFound(
-                new
-                {
-                    error = "History period not found",
-                    period,
-                }
-            );
-        }
-
-        return Results.File(
-            historyFile,
-            contentType: "application/json"
-        );
+            error = "Invalid history period",
+        });
     }
-);
+
+    var historyFile =
+        Path.Combine(paths.HistoryDirectory, $"{period}.json");
+
+    if (!File.Exists(historyFile))
+    {
+        return Results.NotFound(new
+        {
+            error = "History period not found",
+            period,
+        });
+    }
+
+    return Results.File(
+        historyFile,
+        contentType: "application/json"
+    );
+});
 
 
 // ============================================================
 // Latest scraper run
 // ============================================================
 
-app.MapGet(
-    "/api/runs/latest",
-    (AppPaths paths) =>
+app.MapGet("/api/runs/latest", (AppPaths paths) =>
+{
+    var latestRunFile =
+        Path.Combine(paths.RunsDirectory, "latest.json");
+
+    if (!File.Exists(latestRunFile))
     {
-        var latestRunFile = Path.Combine(
-            paths.RunsDirectory,
-            "latest.json"
-        );
-
-        if (!File.Exists(latestRunFile))
-        {
-            return Results.NotFound();
-        }
-
-        return Results.File(
-            latestRunFile,
-            contentType: "application/json"
-        );
+        return Results.NotFound();
     }
-);
+
+    return Results.File(
+        latestRunFile,
+        contentType: "application/json"
+    );
+});
 
 
 // ============================================================
 // Scraper status
 // ============================================================
 
-app.MapGet(
-    "/api/scraper/status",
-    (ScraperRunner runner) =>
+app.MapGet("/api/scraper/status", (ScraperRunner runner) =>
+{
+    return Results.Ok(new
     {
-        return Results.Ok(
-            new
-            {
-                running = runner.IsRunning,
-                process_id = runner.ProcessId,
-            }
-        );
-    }
-);
+        running = runner.IsRunning,
+        process_id = runner.ProcessId,
+    });
+});
 
 
 // ============================================================
 // Run scraper now
 // ============================================================
 
-app.MapPost(
-    "/api/scraper/run",
-    (ScraperRunner runner) =>
+app.MapPost("/api/scraper/run", (ScraperRunner runner) =>
+{
+    var started = runner.TryStart(out var error);
+
+    if (!started)
     {
-        var started = runner.TryStart(out var error);
-
-        if (!started)
+        if (runner.IsRunning)
         {
-            if (runner.IsRunning)
+            return Results.Conflict(new
             {
-                return Results.Conflict(
-                    new
-                    {
-                        error,
-                    }
-                );
-            }
-
-            return Results.Problem(
-                detail: error
-            );
+                error,
+            });
         }
 
-        return Results.Accepted(
-            "/api/scraper/status",
-            new
-            {
-                status = "started",
-                message = "Price checker started.",
-            }
-        );
+        return Results.Problem(detail: error);
     }
-);
+
+    return Results.Accepted(
+        "/api/scraper/status",
+        new
+        {
+            status = "started",
+            message = "Price checker started.",
+        }
+    );
+});
 
 
 // ============================================================
 // Schedule status
 // ============================================================
 
-app.MapGet(
-    "/api/schedule",
-    async (ScheduleService service) =>
-    {
-        var schedule = await service.GetAsync();
-        return Results.Ok(schedule);
-    }
-);
+app.MapGet("/api/schedule", async (ScheduleService service) =>
+{
+    var schedule = await service.GetAsync();
+    return Results.Ok(schedule);
+});
 
 
 // ============================================================
@@ -284,10 +252,7 @@ app.MapGet(
 
 app.MapPut(
     "/api/schedule",
-    async (
-        ScheduleRequest request,
-        ScheduleService service
-    ) =>
+    async (ScheduleRequest request, ScheduleService service) =>
     {
         try
         {
@@ -296,18 +261,14 @@ app.MapPut(
         }
         catch (ArgumentException exception)
         {
-            return Results.BadRequest(
-                new
-                {
-                    error = exception.Message,
-                }
-            );
+            return Results.BadRequest(new
+            {
+                error = exception.Message,
+            });
         }
         catch (Exception exception)
         {
-            return Results.Problem(
-                detail: exception.Message
-            );
+            return Results.Problem(detail: exception.Message);
         }
     }
 );
@@ -317,45 +278,34 @@ app.MapPut(
 // Delete schedule
 // ============================================================
 
-app.MapDelete(
-    "/api/schedule",
-    async (ScheduleService service) =>
+app.MapDelete("/api/schedule", async (ScheduleService service) =>
+{
+    try
     {
-        try
-        {
-            await service.DeleteAsync();
-            return Results.NoContent();
-        }
-        catch (Exception exception)
-        {
-            return Results.Problem(
-                detail: exception.Message
-            );
-        }
+        await service.DeleteAsync();
+        return Results.NoContent();
     }
-);
+    catch (Exception exception)
+    {
+        return Results.Problem(detail: exception.Message);
+    }
+});
 
 
 // ============================================================
 // Product configuration
 // ============================================================
 
-app.MapGet(
-    "/api/product-config",
-    async (ProductConfigService service) =>
-    {
-        var products = await service.GetAllAsync();
-        return Results.Ok(products);
-    }
-);
+app.MapGet("/api/product-config", async (ProductConfigService service) =>
+{
+    var products = await service.GetAllAsync();
+    return Results.Ok(products);
+});
 
 
 app.MapPost(
     "/api/product-config",
-    async (
-        ProductConfigInput input,
-        ProductConfigService service
-    ) =>
+    async (ProductConfigInput input, ProductConfigService service) =>
     {
         try
         {
@@ -368,12 +318,10 @@ app.MapPost(
         }
         catch (ArgumentException exception)
         {
-            return Results.BadRequest(
-                new
-                {
-                    error = exception.Message,
-                }
-            );
+            return Results.BadRequest(new
+            {
+                error = exception.Message,
+            });
         }
     }
 );
@@ -394,21 +342,17 @@ app.MapPut(
         }
         catch (KeyNotFoundException exception)
         {
-            return Results.NotFound(
-                new
-                {
-                    error = exception.Message,
-                }
-            );
+            return Results.NotFound(new
+            {
+                error = exception.Message,
+            });
         }
         catch (ArgumentException exception)
         {
-            return Results.BadRequest(
-                new
-                {
-                    error = exception.Message,
-                }
-            );
+            return Results.BadRequest(new
+            {
+                error = exception.Message,
+            });
         }
     }
 );
@@ -416,10 +360,7 @@ app.MapPut(
 
 app.MapDelete(
     "/api/product-config/{id}",
-    async (
-        string id,
-        ProductConfigService service
-    ) =>
+    async (string id, ProductConfigService service) =>
     {
         try
         {
@@ -428,12 +369,10 @@ app.MapDelete(
         }
         catch (KeyNotFoundException)
         {
-            return Results.NotFound(
-                new
-                {
-                    error = "Product not found",
-                }
-            );
+            return Results.NotFound(new
+            {
+                error = "Product not found",
+            });
         }
     }
 );
@@ -443,14 +382,11 @@ app.MapDelete(
 // Email settings
 // ============================================================
 
-app.MapGet(
-    "/api/settings/email",
-    async (EmailSettingsService service) =>
-    {
-        var settings = await service.GetAsync();
-        return Results.Ok(settings);
-    }
-);
+app.MapGet("/api/settings/email", async (EmailSettingsService service) =>
+{
+    var settings = await service.GetAsync();
+    return Results.Ok(settings);
+});
 
 
 app.MapPut(
@@ -467,12 +403,10 @@ app.MapPut(
         }
         catch (ArgumentException exception)
         {
-            return Results.BadRequest(
-                new
-                {
-                    error = exception.Message,
-                }
-            );
+            return Results.BadRequest(new
+            {
+                error = exception.Message,
+            });
         }
     }
 );
@@ -499,12 +433,24 @@ app.MapPost(
 
 
 // ============================================================
+// AI controllers
+//
+// /api/characters
+// /api/chat/stream
+// etc.
+// ============================================================
+
+app.MapControllers();
+
+
+// ============================================================
 // React SPA fallback
 //
-// Must stay after all /api endpoints.
+// Must stay after all /api endpoints and controllers.
 // ============================================================
 
 app.MapFallbackToFile("index.html");
 
 
 app.Run();
+

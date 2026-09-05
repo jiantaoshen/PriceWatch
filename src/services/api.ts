@@ -2,7 +2,6 @@ interface ApiErrorResponse {
   error?: string;
 }
 
-
 export async function apiJson<T>(
   url: string,
   options?: RequestInit,

@@ -10,8 +10,11 @@ $FrontendDir = $ProjectRoot
 $BackendRoot = Join-Path $ProjectRoot "backend"
 $BackendProject = Join-Path $BackendRoot "PriceWatch.Api"
 $PythonDir = Join-Path $BackendRoot "python"
+$AiDir = Join-Path $BackendRoot "ai"
 
 $VenvDir = Join-Path $ProjectRoot ".venv"
+$AiVenvDir = Join-Path $AiDir ".venv"
+
 $SetupDir = Join-Path $ProjectRoot ".setup"
 
 
@@ -53,7 +56,7 @@ function Save-Hash($sourceFile, $markerFile) {
 
 
 # ============================================================
-# Requirements
+# Required tools
 # ============================================================
 
 Write-Step "Checking required tools"
@@ -66,6 +69,27 @@ Require-Command "python" "Install Python, then run this script again."
 New-Item -ItemType Directory -Force -Path $SetupDir | Out-Null
 
 Write-Host "Required tools found." -ForegroundColor Green
+
+
+# ============================================================
+# Validate directories
+# ============================================================
+
+if (-not (Test-Path $BackendRoot)) {
+    throw "Backend directory not found: $BackendRoot"
+}
+
+if (-not (Test-Path $BackendProject)) {
+    throw "ASP.NET Core project directory not found: $BackendProject"
+}
+
+if (-not (Test-Path $PythonDir)) {
+    throw "Scraper directory not found: $PythonDir"
+}
+
+if (-not (Test-Path $AiDir)) {
+    throw "AI directory not found: $AiDir"
+}
 
 
 # ============================================================
@@ -83,7 +107,10 @@ if (-not (Test-Path $PackageJson)) {
     throw "package.json not found: $PackageJson"
 }
 
-if (-not (Test-Path $NodeModules) -or (Test-HashChanged $NpmSource $NpmMarker)) {
+if (
+    -not (Test-Path $NodeModules) -or
+    (Test-HashChanged $NpmSource $NpmMarker)
+) {
     Write-Step "Installing frontend dependencies"
 
     Push-Location $FrontendDir
@@ -112,49 +139,52 @@ else {
 
 
 # ============================================================
-# Python virtual environment
+# Scraper Python virtual environment
 # ============================================================
 
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 
 if (-not (Test-Path $VenvPython)) {
-    Write-Step "Creating Python virtual environment"
+    Write-Step "Creating scraper Python virtual environment"
 
     python -m venv $VenvDir
 
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to create Python virtual environment."
+        throw "Failed to create scraper Python virtual environment."
     }
 }
 else {
-    Write-Host "Python virtual environment already exists. Skipping." -ForegroundColor DarkGray
+    Write-Host "Scraper Python virtual environment already exists. Skipping." -ForegroundColor DarkGray
 }
 
 
 # ============================================================
-# Python dependencies
+# Scraper Python dependencies
 # ============================================================
 
 $Requirements = Join-Path $PythonDir "requirements.txt"
-$PythonMarker = Join-Path $SetupDir "requirements.hash"
+$PythonMarker = Join-Path $SetupDir "scraper-requirements.hash"
 
 if (Test-Path $Requirements) {
     if (Test-HashChanged $Requirements $PythonMarker) {
-        Write-Step "Installing Python dependencies"
+        Write-Step "Installing scraper Python dependencies"
 
         & $VenvPython -m pip install --upgrade pip
+
         if ($LASTEXITCODE -ne 0) {
-            throw "Failed to update pip."
+            throw "Failed to update scraper pip."
         }
 
         & $VenvPython -m pip install -r $Requirements
+
         if ($LASTEXITCODE -ne 0) {
-            throw "Python dependency installation failed."
+            throw "Scraper Python dependency installation failed."
         }
 
         Write-Step "Installing Playwright Firefox"
 
         & $VenvPython -m playwright install firefox
+
         if ($LASTEXITCODE -ne 0) {
             throw "Playwright Firefox installation failed."
         }
@@ -162,12 +192,86 @@ if (Test-Path $Requirements) {
         Save-Hash $Requirements $PythonMarker
     }
     else {
-        Write-Host "Python dependencies already installed. Skipping." -ForegroundColor DarkGray
+        Write-Host "Scraper Python dependencies already installed. Skipping." -ForegroundColor DarkGray
     }
 }
 else {
     Write-Host "backend\python\requirements.txt not found. Skipping." -ForegroundColor Yellow
 }
+
+
+# ============================================================
+# Local AI virtual environment
+# ============================================================
+
+$AiPython = Join-Path $AiVenvDir "Scripts\python.exe"
+$AiEntry = Join-Path $AiDir "main.py"
+
+if (-not (Test-Path $AiEntry)) {
+    throw "AI entry point not found: $AiEntry"
+}
+
+if (-not (Test-Path $AiPython)) {
+    Write-Step "Creating Local AI Python virtual environment"
+
+    python -m venv $AiVenvDir
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create Local AI Python virtual environment."
+    }
+}
+else {
+    Write-Host "Local AI virtual environment already exists. Skipping." -ForegroundColor DarkGray
+}
+
+
+# ============================================================
+# Local AI dependencies
+# ============================================================
+
+$AiRequirements = Join-Path $AiDir "requirements.txt"
+$AiMarker = Join-Path $SetupDir "ai-requirements.hash"
+
+if (Test-Path $AiRequirements) {
+    if (Test-HashChanged $AiRequirements $AiMarker) {
+        Write-Step "Installing Local AI dependencies"
+
+        & $AiPython -m pip install --upgrade pip
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to update Local AI pip."
+        }
+
+        & $AiPython -m pip install -r $AiRequirements
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Local AI dependency installation failed."
+        }
+
+        Save-Hash $AiRequirements $AiMarker
+    }
+    else {
+        Write-Host "Local AI dependencies already installed. Skipping." -ForegroundColor DarkGray
+    }
+}
+else {
+    Write-Host "backend\ai\requirements.txt not found. Using existing AI environment." -ForegroundColor Yellow
+}
+
+
+# ============================================================
+# Verify Local AI
+# ============================================================
+
+Write-Step "Checking Local AI environment"
+
+& $AiPython -c "import fastapi, httpx, pydantic, uvicorn"
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Local AI dependencies are incomplete. Install fastapi, httpx, pydantic and uvicorn."
+}
+
+Write-Host "Local AI environment is ready." -ForegroundColor Green
 
 
 # ============================================================
@@ -231,7 +335,20 @@ if ($RunScraper) {
 
 
 # ============================================================
-# Start application
+# Start Local AI
+# ============================================================
+
+Write-Step "Starting Local AI"
+
+$AiCommand = "& `"$AiPython`" -m uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+
+Start-Process powershell `
+    -WorkingDirectory $AiDir `
+    -ArgumentList "-NoExit", "-Command", $AiCommand
+
+
+# ============================================================
+# Start ASP.NET Core
 # ============================================================
 
 Write-Step "Starting ASP.NET Core API"
@@ -242,6 +359,10 @@ Start-Process powershell `
     -WorkingDirectory $BackendRoot `
     -ArgumentList "-NoExit", "-Command", $BackendCommand
 
+
+# ============================================================
+# Start Vite
+# ============================================================
 
 Write-Step "Starting Vite frontend"
 
@@ -256,11 +377,27 @@ Start-Process powershell `
 
 Write-Host ""
 Write-Host "Price Watch started." -ForegroundColor Green
-Write-Host "ASP.NET Core and Vite are running in separate PowerShell windows."
 Write-Host ""
+
+Write-Host "Services:" -ForegroundColor Cyan
+Write-Host "  Frontend:       http://localhost:5173"
+Write-Host "  Local AI:       http://127.0.0.1:8000"
+Write-Host "  Ollama:         http://127.0.0.1:11434"
+Write-Host "  ASP.NET Core:   see API PowerShell window"
+Write-Host ""
+
+Write-Host "Architecture:" -ForegroundColor Cyan
+Write-Host "  React"
+Write-Host "    -> ASP.NET Core"
+Write-Host "         -> Local AI"
+Write-Host "              -> Ollama"
+Write-Host "         -> Python Scraper"
+Write-Host ""
+
 Write-Host "Normal start:"
 Write-Host "  .\start.ps1"
 Write-Host ""
+
 Write-Host "Run scraper once before starting:"
 Write-Host "  .\start.ps1 -RunScraper"
 Write-Host ""

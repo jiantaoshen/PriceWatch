@@ -6,6 +6,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { ProductDetail } from "@/components/products/ProductDetail";
 import { ProductList } from "@/components/products/ProductList";
 import { ScraperDetail } from "@/components/scraper/ScraperDetail";
+import { AiChat } from "@/components/ai/AiChat";
 
 import { useAppData } from "@/hooks/useAppData";
 import type { AppView } from "@/types/app";
@@ -73,6 +74,8 @@ function App() {
                 onRefresh={data.refresh}
               />
             )}
+
+            {view === "ai" && <AiChat />}
 
             {view === "scraper" && <ScraperDetail run={data.latestRun} />}
 
