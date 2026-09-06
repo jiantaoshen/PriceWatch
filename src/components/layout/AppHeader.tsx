@@ -1,43 +1,21 @@
-import {
-  Activity,
-} from "lucide-react";
+import { Activity, Bot } from "lucide-react";
 
-import {
-  Button,
-} from "@/components/ui/button";
+import { RunNowButton } from "@/components/RunNowButton";
+import { Button } from "@/components/ui/button";
 
-import {
-  RunNowButton,
-} from "@/components/RunNowButton";
+import { getRunHealth } from "@/utils/runHealth";
 
-import {
-  getRunHealth,
-} from "@/utils/runHealth";
-
-import type {
-  AppView,
-} from "@/types/app";
-
-import type {
-  RunMetadata,
-} from "@/types/run";
-
+import type { ReactNode } from "react";
+import type { AppView } from "@/types/app";
+import type { RunMetadata } from "@/types/run";
 
 interface AppHeaderProps {
   view: AppView;
-
   generatedAt: string;
-
-  latestRun:
-    RunMetadata | null;
-
-  onNavigate:
-    (view: AppView) => void;
-
-  onRefresh:
-    () => void | Promise<void>;
+  latestRun: RunMetadata | null;
+  onNavigate: (view: AppView) => void;
+  onRefresh: () => void | Promise<void>;
 }
-
 
 export function AppHeader({
   view,
@@ -46,140 +24,66 @@ export function AppHeader({
   onNavigate,
   onRefresh,
 }: AppHeaderProps) {
-  const health =
-    getRunHealth(latestRun);
-
+  const health = getRunHealth(latestRun);
 
   return (
-    <header
-      className="
-        sticky top-0 z-40
-        border-b
-        bg-background/95
-        backdrop-blur
-      "
-    >
-      <div
-        className="
-          mx-auto flex
-          min-h-14
-          max-w-6xl
-          flex-wrap
-          items-center
-          gap-3
-          px-5 py-2
-          sm:px-6
-        "
-      >
+    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+      <div className="mx-auto flex min-h-14 max-w-6xl flex-wrap items-center gap-3 px-5 py-2 sm:px-6">
         <button
           type="button"
-          className="
-            font-semibold
-            tracking-tight
-          "
-          onClick={() =>
-            onNavigate(
-              "dashboard",
-            )
-          }
+          className="font-semibold tracking-tight"
+          onClick={() => onNavigate("dashboard")}
         >
           PriceWatch
         </button>
 
-
         <div className="hidden h-5 w-px bg-border sm:block" />
-
 
         <nav className="flex gap-1">
           <NavButton
-            active={
-              view === "dashboard"
-            }
-            onClick={() =>
-              onNavigate(
-                "dashboard",
-              )
-            }
+            active={view === "dashboard"}
+            onClick={() => onNavigate("dashboard")}
           >
             Dashboard
           </NavButton>
 
           <NavButton
-            active={
-              view === "automation"
-            }
-            onClick={() =>
-              onNavigate(
-                "automation",
-              )
-            }
+            active={view === "automation"}
+            onClick={() => onNavigate("automation")}
           >
             Automation
           </NavButton>
 
           <NavButton
-            active={
-              view === "email"
-            }
-            onClick={() =>
-              onNavigate("email")
-            }
+            active={view === "email"}
+            onClick={() => onNavigate("email")}
           >
             Email
           </NavButton>
+
+          <NavButton
+            active={view === "ai"}
+            onClick={() => onNavigate("ai")}
+          >
+            <Bot />
+            AI Chat
+          </NavButton>
         </nav>
 
-
-        <div
-          className="
-            ml-auto
-            flex items-center
-            gap-2
-          "
-        >
-          <span
-            className="
-              hidden text-xs
-              text-muted-foreground
-              xl:block
-            "
-          >
-            {formatUpdated(
-              generatedAt,
-            )}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="hidden text-xs text-muted-foreground xl:block">
+            {formatUpdated(generatedAt)}
           </span>
 
-
-          <RunNowButton
-            onCompleted={
-              onRefresh
-            }
-          />
-
+          <RunNowButton onCompleted={onRefresh} />
 
           <Button
             type="button"
             size="sm"
-            variant={
-              view === "scraper"
-                ? "secondary"
-                : "outline"
-            }
-            onClick={() =>
-              onNavigate(
-                "scraper",
-              )
-            }
+            variant={view === "scraper" ? "secondary" : "outline"}
+            onClick={() => onNavigate("scraper")}
           >
-            <span
-              className={`
-                size-2
-                rounded-full
-                ${healthDot(
-                  health.state,
-                )}
-              `}
-            />
+            <span className={`size-2 rounded-full ${healthDot(health.state)}`} />
 
             <span className="hidden lg:inline">
               {health.label}
@@ -193,7 +97,6 @@ export function AppHeader({
   );
 }
 
-
 function NavButton({
   active,
   onClick,
@@ -201,17 +104,13 @@ function NavButton({
 }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Button
       type="button"
       size="sm"
-      variant={
-        active
-          ? "secondary"
-          : "ghost"
-      }
+      variant={active ? "secondary" : "ghost"}
       onClick={onClick}
     >
       {children}
@@ -219,57 +118,32 @@ function NavButton({
   );
 }
 
-
-function healthDot(
-  state: ReturnType<
-    typeof getRunHealth
-  >["state"],
-) {
+function healthDot(state: ReturnType<typeof getRunHealth>["state"]) {
   switch (state) {
     case "healthy":
-      return "bg-emerald-500";
-
+      return "bg-success";
     case "warning":
-      return "bg-amber-500";
-
+      return "bg-warning";
     case "stale":
-      return "bg-orange-500";
-
+      return "bg-stale";
     case "failed":
       return "bg-destructive";
-
     default:
       return "bg-muted-foreground";
   }
 }
 
+function formatUpdated(value: string) {
+  if (!value) return "Never";
 
-function formatUpdated(
-  value: string,
-) {
-  if (!value) {
-    return "Never";
-  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
 
-  const date =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
-    return "Unknown";
-  }
-
-  return date.toLocaleString(
-    "en-US",
-    {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    },
-  );
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
