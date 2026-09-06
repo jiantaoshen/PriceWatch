@@ -1,16 +1,17 @@
-using PriceWatch.Api.Models; 
+using PriceWatch.Api.Models;
 
 namespace PriceWatch.Api.Services;
 
 public interface IAiService
 {
-    Task<IReadOnlyList<CharacterDto>> GetCharactersAsync(
+    Task<IReadOnlyList<AdvisorDto>> GetAdvisorsAsync(
         CancellationToken cancellationToken
     );
 
     Task StreamChatAsync(
-        ChatRequest request,
+        AiChatPayload request,
         Stream outputStream,
         CancellationToken cancellationToken
     );
 }
+

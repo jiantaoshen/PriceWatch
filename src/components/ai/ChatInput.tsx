@@ -3,9 +3,11 @@ import { Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
+import type { KeyboardEvent } from "react";
+
 interface ChatInputProps {
   input: string;
-  characterName: string;
+  advisorName: string;
   isGenerating: boolean;
   onInputChange: (value: string) => void;
   onSend: () => void;
@@ -14,14 +16,16 @@ interface ChatInputProps {
 
 export function ChatInput({
   input,
-  characterName,
+  advisorName,
   isGenerating,
   onInputChange,
   onSend,
   onStop,
 }: ChatInputProps) {
-  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey) return;
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
 
     event.preventDefault();
     onSend();
@@ -34,16 +38,20 @@ export function ChatInput({
           value={input}
           onChange={event => onInputChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={`和 ${characterName} 说点什么...`}
+          placeholder={`Ask ${advisorName} about these prices...`}
           disabled={isGenerating}
           rows={1}
           className="min-h-11 max-h-40 resize-none"
         />
 
         {isGenerating ? (
-          <Button type="button" variant="destructive" onClick={onStop}>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={onStop}
+          >
             <Square data-icon="inline-start" />
-            停止
+            Stop
           </Button>
         ) : (
           <Button
@@ -52,14 +60,19 @@ export function ChatInput({
             onClick={onSend}
           >
             <Send data-icon="inline-start" />
-            发送
+            Send
           </Button>
         )}
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-4 text-xs text-muted-foreground">
-        <span>Enter 发送 · Shift + Enter 换行</span>
-        <span>AI：Summary + 最近 20 条</span>
+        <span>
+          Enter to send · Shift + Enter for new line
+        </span>
+
+        <span>
+          PriceWatch data + conversation context
+        </span>
       </div>
     </div>
   );

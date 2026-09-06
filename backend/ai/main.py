@@ -7,9 +7,9 @@ import httpx
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from character import characters
+from advisor import advisors
 from prompt_builder import build_system_prompt
 
 
@@ -28,41 +28,110 @@ MODEL_NAME = os.getenv(
 MAX_RECENT_MESSAGES = 20
 
 
+# ============================================================
+# Models
+# ============================================================
+
 class Message(BaseModel):
     role: Literal["user", "assistant"]
     content: str
 
 
-class ChatRequest(BaseModel):
-    character_id: str
-    messages: list[Message]
+class PricePoint(BaseModel):
+    date: str
+    price: float
 
+
+class ProductContext(BaseModel):
+    product_id: str
+    name: str
+    currency: str
+
+    current_price: float | None = None
+    target_price: float | None = None
+    previous_price: float | None = None
+
+    historical_low: float | None = None
+    historical_high: float | None = None
+    historical_average: float | None = None
+
+    history: list[PricePoint] = Field(default_factory=list)
+
+
+class ChatRequest(BaseModel):
+    advisor_id: str
+    products: list[ProductContext] = Field(default_factory=list)
+    messages: list[Message] = Field(default_factory=list)
+
+
+# ============================================================
+# Health
+# ============================================================
 
 @app.get("/health")
 async def health():
     return {
         "status": "ok",
         "model": MODEL_NAME,
+        "advisors": len(advisors),
     }
 
 
-@app.get("/characters")
-async def get_characters():
-    return list(characters.values())
+# ============================================================
+# Advisors
+# ============================================================
+
+def get_public_advisor(advisor: dict) -> dict:
+    return {
+        "id": advisor["id"],
+        "name": advisor["name"],
+        "title": advisor["title"],
+        "description": advisor["description"],
+        "greeting": advisor["greeting"],
+    }
 
 
-@app.get("/characters/{character_id}")
-async def get_character(character_id: str):
-    character = characters.get(character_id)
+@app.get("/advisors")
+async def get_advisors():
+    return [
+        get_public_advisor(advisor)
+        for advisor in advisors.values()
+    ]
 
-    if not character:
+
+@app.get("/advisors/{advisor_id}")
+async def get_advisor(advisor_id: str):
+    advisor = advisors.get(advisor_id)
+
+    if not advisor:
         raise HTTPException(
             status_code=404,
-            detail="Character not found",
+            detail="Advisor not found",
         )
 
-    return character
+    return get_public_advisor(advisor)
 
+
+# ============================================================
+# Temporary compatibility
+#
+# Remove these after ASP.NET and React have fully moved from
+# "characters" to "advisors".
+# ============================================================
+
+@app.get("/characters", include_in_schema=False)
+async def get_characters_legacy():
+    return await get_advisors()
+
+
+@app.get("/characters/{advisor_id}", include_in_schema=False)
+async def get_character_legacy(advisor_id: str):
+    return await get_advisor(advisor_id)
+
+
+# ============================================================
+# Conversation summary
+# ============================================================
 
 async def summarize_messages(messages: list[Message]) -> str:
     if not messages:
@@ -74,29 +143,35 @@ async def summarize_messages(messages: list[Message]) -> str:
     )
 
     summary_prompt = f"""
-请总结下面这段角色扮演聊天记录。
+Summarize the older part of this PriceWatch shopping conversation.
 
-目标：
-保留之后继续聊天时真正重要的信息。
+The summary is internal context for future messages.
 
-重点保留：
-- 用户的重要个人信息
-- 用户表达过的喜好
-- 用户提到的重要人物
-- 已发生的重要事件
-- 用户和角色之间的关系变化
-- 约定、承诺和计划
-- 对后续剧情重要的信息
+Preserve only information that may matter later, including:
 
-不要：
-- 保留无意义寒暄
-- 逐句复述
-- 添加聊天中不存在的信息
-- 写得过长
+- Products the user discussed
+- Products the user is considering buying
+- Budget or price preferences
+- How urgently the user needs an item
+- Price thresholds mentioned by the user
+- User preferences
+- Important comparisons
+- Decisions already made
+- Reasons the user gave for buying or waiting
+- Relevant previous advisor recommendations
 
-请输出简洁的事实总结。
+Do not:
 
-聊天记录：
+- Invent information
+- Add prices that were not mentioned
+- Add product facts that were not provided
+- Preserve meaningless small talk
+- Repeat the conversation line by line
+- Make the summary unnecessarily long
+
+Write a concise factual summary in English.
+
+Conversation:
 
 {conversation_text}
 """.strip()
@@ -106,7 +181,11 @@ async def summarize_messages(messages: list[Message]) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": "你是一个负责压缩聊天上下文的助手。只总结已有信息，不要编造。",
+                "content": (
+                    "You summarize shopping conversations for internal context. "
+                    "Preserve only facts that appeared in the conversation. "
+                    "Never invent information."
+                ),
             },
             {
                 "role": "user",
@@ -133,17 +212,29 @@ async def summarize_messages(messages: list[Message]) -> str:
     )
 
 
+# ============================================================
+# Chat stream
+# ============================================================
+
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
-    character = characters.get(request.character_id)
+    advisor = advisors.get(request.advisor_id)
 
-    if not character:
+    if not advisor:
         raise HTTPException(
             status_code=404,
-            detail="Character not found",
+            detail="Advisor not found",
         )
 
-    system_prompt = build_system_prompt(character)
+    products = [
+        product.model_dump()
+        for product in request.products
+    ]
+
+    system_prompt = build_system_prompt(
+        advisor,
+        products,
+    )
 
     recent_messages = request.messages
     conversation_summary = ""
@@ -169,10 +260,13 @@ async def chat_stream(request: ChatRequest):
                 {
                     "role": "system",
                     "content": f"""
-以下是用户与角色之前聊天的重要摘要。
+The following is an internal summary of the older conversation.
 
-这是过去真实发生过的事情，
-请在后续对话中自然地记住这些信息。
+Treat it only as remembered conversation context.
+
+Do not treat it as a source of current PriceWatch price data.
+
+Current product prices must come from the PriceWatch Product Data section of the main system prompt.
 
 Conversation Summary:
 
@@ -207,7 +301,10 @@ Conversation Summary:
                     if not line:
                         continue
 
-                    data = json.loads(line)
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
 
                     content = (
                         data
@@ -222,4 +319,3 @@ Conversation Summary:
         generate(),
         media_type="text/plain; charset=utf-8",
     )
-

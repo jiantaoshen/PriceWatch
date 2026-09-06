@@ -1,19 +1,53 @@
-namespace PriceWatch.Api.Models; 
+namespace PriceWatch.Api.Models;
 
-public record ChatMessage(
-    string Role,
-    string Content
-);
+public sealed class AdvisorDto
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string Title { get; init; } = "";
+    public string Description { get; init; } = "";
+    public string Greeting { get; init; } = "";
+}
 
-public record ChatRequest(
-    string CharacterId,
-    List<ChatMessage> Messages
-);
+public sealed class ChatMessage
+{
+    public string Role { get; init; } = "";
+    public string Content { get; init; } = "";
+}
 
-public record CharacterDto(
-    string Id,
-    string Name,
-    int Age,
-    string Occupation,
-    string Greeting
-);
+public sealed class AiChatRequest
+{
+    public string AdvisorId { get; init; } = "";
+    public List<string> ProductIds { get; init; } = [];
+    public List<ChatMessage> Messages { get; init; } = [];
+}
+
+public sealed class AiPricePoint
+{
+    public string Date { get; init; } = "";
+    public double Price { get; init; }
+}
+
+public sealed class AiProductContext
+{
+    public string ProductId { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string Currency { get; init; } = "";
+
+    public double? CurrentPrice { get; init; }
+    public double? TargetPrice { get; init; }
+    public double? PreviousPrice { get; init; }
+
+    public double? HistoricalLow { get; init; }
+    public double? HistoricalHigh { get; init; }
+    public double? HistoricalAverage { get; init; }
+
+    public List<AiPricePoint> History { get; init; } = [];
+}
+
+public sealed class AiChatPayload
+{
+    public string AdvisorId { get; init; } = "";
+    public IReadOnlyList<AiProductContext> Products { get; init; } = [];
+    public IReadOnlyList<ChatMessage> Messages { get; init; } = [];
+}

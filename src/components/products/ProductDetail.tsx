@@ -18,6 +18,7 @@ interface ProductDetailProps {
   history: DataFile[];
   onBack: () => void;
   onRefresh: () => void | Promise<void>;
+  onAskAi: () => void;
 }
 
 
@@ -26,6 +27,7 @@ export function ProductDetail({
   history,
   onBack,
   onRefresh,
+  onAskAi,
 }: ProductDetailProps) {
   const priceHistory = useProductHistory(product, history);
   const unit = product.unit ?? null;
@@ -38,6 +40,7 @@ export function ProductDetail({
         product={product}
         onBack={onBack}
         onRefresh={onRefresh}
+        onAskAi={onAskAi}
       />
 
       <Separator />

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Bot, Trash2 } from "lucide-react";
 
+import { ProductFormDialog } from "@/components/products/ProductFormDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,29 +12,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import { ProductFormDialog } from "@/components/products/ProductFormDialog";
-
 import { deleteProductConfig } from "@/services/productConfigApi";
-
 
 interface ProductDetailActionsProps {
   productId: string;
   productName: string;
   onUpdated?: () => void | Promise<void>;
   onDeleted?: () => void | Promise<void>;
+  onAskAi: () => void;
 }
-
 
 export function ProductDetailActions({
   productId,
   productName,
   onUpdated,
   onDeleted,
+  onAskAi,
 }: ProductDetailActionsProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
 
   async function handleDelete() {
     if (isDeleting) return;
@@ -46,19 +44,16 @@ export function ProductDetailActions({
       await onDeleted?.();
 
       setDeleteOpen(false);
-    }
-    catch (error) {
+    } catch (error) {
       setError(
         error instanceof Error
           ? error.message
           : "Failed to delete product.",
       );
-    }
-    finally {
+    } finally {
       setIsDeleting(false);
     }
   }
-
 
   return (
     <>
@@ -68,6 +63,15 @@ export function ProductDetailActions({
           productId={productId}
           onSaved={onUpdated}
         />
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onAskAi}
+        >
+          <Bot data-icon="inline-start" />
+          Ask AI
+        </Button>
 
         <Button
           type="button"
@@ -81,7 +85,6 @@ export function ProductDetailActions({
           Delete
         </Button>
       </div>
-
 
       <Dialog
         open={deleteOpen}
@@ -108,13 +111,11 @@ export function ProductDetailActions({
             </DialogDescription>
           </DialogHeader>
 
-
           {error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
-
 
           <DialogFooter>
             <Button
@@ -133,7 +134,6 @@ export function ProductDetailActions({
               onClick={() => void handleDelete()}
             >
               <Trash2 data-icon="inline-start" />
-
               {isDeleting ? "Deleting..." : "Delete product"}
             </Button>
           </DialogFooter>

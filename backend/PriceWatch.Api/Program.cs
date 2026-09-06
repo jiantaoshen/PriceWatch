@@ -16,6 +16,7 @@ builder.Services.AddSingleton<ScraperRunner>();
 builder.Services.AddSingleton<ScheduleService>();
 builder.Services.AddSingleton<ProductConfigService>();
 builder.Services.AddSingleton<EmailSettingsService>();
+builder.Services.AddSingleton<AiProductContextService>();
 
 
 // ============================================================

@@ -1,12 +1,12 @@
-export type Character = {
+export interface Advisor {
   id: string;
   name: string;
-  age: number;
-  occupation: string;
+  title: string;
+  description: string;
   greeting: string;
-};
+}
 
-export type Message = {
+export interface Message {
   role: "user" | "assistant";
   content: string;
-};
+}

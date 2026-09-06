@@ -1,6 +1,5 @@
 import { Bot } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -9,60 +8,52 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import type { Character } from "@/types/chat";
+import type { Advisor } from "@/types/chat";
 
-interface CharacterHeaderProps {
-  characters: Character[];
-  selectedCharacter: Character;
-  selectedCharacterId: string;
+interface AdvisorHeaderProps {
+  advisors: Advisor[];
+  selectedAdvisor: Advisor;
+  selectedAdvisorId: string;
   isGenerating: boolean;
-  onCharacterChange: (characterId: string) => void;
+  onAdvisorChange: (advisorId: string) => void;
 }
 
-export function CharacterHeader({
-  characters,
-  selectedCharacter,
-  selectedCharacterId,
+export function AdvisorHeader({
+  advisors,
+  selectedAdvisor,
+  selectedAdvisorId,
   isGenerating,
-  onCharacterChange,
-}: CharacterHeaderProps) {
+  onAdvisorChange,
+}: AdvisorHeaderProps) {
   return (
     <div className="flex items-center gap-3 border-b px-5 py-4">
-      <Avatar className="size-10">
-        <AvatarFallback>
-          {selectedCharacter.name.slice(0, 1).toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <Bot className="size-5" />
+      </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <h2 className="truncate font-semibold">
-            {selectedCharacter.name}
-          </h2>
+        <h2 className="truncate font-semibold">
+          {selectedAdvisor.name}
+        </h2>
 
-          <Bot className="size-4 text-muted-foreground" />
-        </div>
-
-        {selectedCharacter.occupation && (
-          <p className="truncate text-sm text-muted-foreground">
-            {selectedCharacter.occupation}
-          </p>
-        )}
+        <p className="truncate text-sm text-muted-foreground">
+          {selectedAdvisor.title}
+        </p>
       </div>
 
       <Select
-        value={selectedCharacterId}
-        onValueChange={onCharacterChange}
+        value={selectedAdvisorId}
+        onValueChange={onAdvisorChange}
         disabled={isGenerating}
       >
-        <SelectTrigger className="w-44">
+        <SelectTrigger className="w-48">
           <SelectValue />
         </SelectTrigger>
 
         <SelectContent>
-          {characters.map(character => (
-            <SelectItem key={character.id} value={character.id}>
-              {character.name}
+          {advisors.map(advisor => (
+            <SelectItem key={advisor.id} value={advisor.id}>
+              {advisor.name} · {advisor.title}
             </SelectItem>
           ))}
         </SelectContent>
@@ -70,4 +61,3 @@ export function CharacterHeader({
     </div>
   );
 }
-

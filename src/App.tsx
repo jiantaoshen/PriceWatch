@@ -1,14 +1,15 @@
 import { useState } from "react";
 
+import { AiChat } from "@/components/ai/AiChat";
 import { AutomationSettings } from "@/components/AutomationSettings";
 import { EmailSettings } from "@/components/EmailSettings";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { ProductDetail } from "@/components/products/ProductDetail";
 import { ProductList } from "@/components/products/ProductList";
 import { ScraperDetail } from "@/components/scraper/ScraperDetail";
-import { AiChat } from "@/components/ai/AiChat";
 
 import { useAppData } from "@/hooks/useAppData";
+
 import type { AppView } from "@/types/app";
 
 function App() {
@@ -16,13 +17,21 @@ function App() {
 
   const [view, setView] = useState<AppView>("dashboard");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [aiProductIds, setAiProductIds] = useState<string[]>([]);
 
   const selectedProduct =
     data.latestData.data.find(product => product.product_id === selectedProductId) ?? null;
 
   function navigate(next: AppView) {
     setSelectedProductId(null);
+    setAiProductIds([]);
     setView(next);
+  }
+
+  function handleAskAi(productId: string) {
+    setSelectedProductId(null);
+    setAiProductIds([productId]);
+    setView("ai");
   }
 
   function handleBackFromProduct() {
@@ -63,6 +72,7 @@ function App() {
             history={data.historyData}
             onBack={handleBackFromProduct}
             onRefresh={data.refresh}
+            onAskAi={() => handleAskAi(selectedProduct.product_id)}
           />
         ) : (
           <>
@@ -70,18 +80,28 @@ function App() {
               <ProductList
                 data={data.latestData}
                 history={data.history}
-                onSelectProduct={product => setSelectedProductId(product.product_id)}
+                onSelectProduct={product =>
+                  setSelectedProductId(product.product_id)
+                }
                 onRefresh={data.refresh}
               />
             )}
 
-            {view === "ai" && <AiChat />}
+            {view === "ai" && (
+              <AiChat initialProductIds={aiProductIds} />
+            )}
 
-            {view === "scraper" && <ScraperDetail run={data.latestRun} />}
+            {view === "scraper" && (
+              <ScraperDetail run={data.latestRun} />
+            )}
 
-            {view === "automation" && <AutomationSettings />}
+            {view === "automation" && (
+              <AutomationSettings />
+            )}
 
-            {view === "email" && <EmailSettings />}
+            {view === "email" && (
+              <EmailSettings />
+            )}
           </>
         )}
       </main>
@@ -90,3 +110,4 @@ function App() {
 }
 
 export default App;
+

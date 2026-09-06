@@ -15,49 +15,74 @@ public sealed class AiService : IAiService
         PropertyNameCaseInsensitive = true,
     };
 
-    public AiService(HttpClient httpClient, ILogger<AiService> logger)
+    public AiService(
+        HttpClient httpClient,
+        ILogger<AiService> logger
+    )
     {
         _httpClient = httpClient;
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<CharacterDto>> GetCharactersAsync(
+    public async Task<IReadOnlyList<AdvisorDto>> GetAdvisorsAsync(
         CancellationToken cancellationToken
     )
     {
-        _logger.LogInformation("Requesting characters from AI service");
-
         using var response = await _httpClient.GetAsync(
-            "characters",
+            "advisors",
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken
         );
 
         await EnsureSuccessAsync(response, cancellationToken);
 
-        var characters = await response.Content.ReadFromJsonAsync<List<CharacterDto>>(
-            JsonOptions,
-            cancellationToken
-        );
+        var advisors =
+            await response.Content.ReadFromJsonAsync<List<AdvisorDto>>(
+                JsonOptions,
+                cancellationToken
+            );
 
-        return characters ?? [];
+        return advisors ?? [];
     }
 
     public async Task StreamChatAsync(
-        ChatRequest request,
+        AiChatPayload request,
         Stream outputStream,
         CancellationToken cancellationToken
     )
     {
         _logger.LogInformation(
-            "Sending chat request for character {CharacterId} with {MessageCount} messages",
-            request.CharacterId,
+            "Sending AI request using advisor {AdvisorId} with {ProductCount} products and {MessageCount} messages",
+            request.AdvisorId,
+            request.Products.Count,
             request.Messages.Count
         );
 
         var payload = new
         {
-            character_id = request.CharacterId,
+            advisor_id = request.AdvisorId,
+
+            products = request.Products.Select(product => new
+            {
+                product_id = product.ProductId,
+                name = product.Name,
+                currency = product.Currency,
+
+                current_price = product.CurrentPrice,
+                target_price = product.TargetPrice,
+                previous_price = product.PreviousPrice,
+
+                historical_low = product.HistoricalLow,
+                historical_high = product.HistoricalHigh,
+                historical_average = product.HistoricalAverage,
+
+                history = product.History.Select(point => new
+                {
+                    date = point.Date,
+                    price = point.Price,
+                }),
+            }),
+
             messages = request.Messages.Select(message => new
             {
                 role = message.Role,
@@ -81,9 +106,8 @@ public sealed class AiService : IAiService
 
         await EnsureSuccessAsync(response, cancellationToken);
 
-        await using var aiStream = await response.Content.ReadAsStreamAsync(
-            cancellationToken
-        );
+        await using var aiStream =
+            await response.Content.ReadAsStreamAsync(cancellationToken);
 
         var buffer = new byte[4096];
 
@@ -94,7 +118,8 @@ public sealed class AiService : IAiService
                 cancellationToken
             );
 
-            if (bytesRead == 0) break;
+            if (bytesRead == 0)
+                break;
 
             await outputStream.WriteAsync(
                 buffer.AsMemory(0, bytesRead),
@@ -103,11 +128,6 @@ public sealed class AiService : IAiService
 
             await outputStream.FlushAsync(cancellationToken);
         }
-
-        _logger.LogInformation(
-            "AI stream completed for character {CharacterId}",
-            request.CharacterId
-        );
     }
 
     private async Task EnsureSuccessAsync(
@@ -115,18 +135,20 @@ public sealed class AiService : IAiService
         CancellationToken cancellationToken
     )
     {
-        if (response.IsSuccessStatusCode) return;
+        if (response.IsSuccessStatusCode)
+            return;
 
-        var error = await response.Content.ReadAsStringAsync(cancellationToken);
+        var error =
+            await response.Content.ReadAsStringAsync(cancellationToken);
 
         _logger.LogError(
-            "AI service returned {StatusCode}: {Error}",
+            "Local AI returned {StatusCode}: {Error}",
             response.StatusCode,
             error
         );
 
         throw new HttpRequestException(
-            $"AI service returned {(int)response.StatusCode}: {error}"
+            $"Local AI returned {(int)response.StatusCode}: {error}"
         );
     }
 }

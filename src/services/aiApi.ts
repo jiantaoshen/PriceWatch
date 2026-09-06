@@ -1,26 +1,24 @@
+import { apiJson } from "@/services/api";
 
-
-import type { Character, Message } from "../types/chat";
+import type { Advisor, Message } from "@/types/chat";
 
 interface StreamChatOptions {
-  characterId: string;
+  advisorId: string;
+  productIds: string[];
   messages: Message[];
   signal: AbortSignal;
   onChunk: (chunk: string) => void;
 }
 
-export async function getCharacters(): Promise<Character[]> {
-  const response = await fetch("/api/characters");
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  return response.json();
+export function getAdvisors(): Promise<Advisor[]> {
+  return apiJson<Advisor[]>("/api/advisors", {
+    cache: "no-store",
+  });
 }
 
 export async function streamChat({
-  characterId,
+  advisorId,
+  productIds,
   messages,
   signal,
   onChunk,
@@ -28,12 +26,17 @@ export async function streamChat({
   const response = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ characterId, messages }),
+    body: JSON.stringify({
+      advisorId,
+      productIds,
+      messages,
+    }),
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    throw new Error(text || `HTTP ${response.status}`);
   }
 
   if (!response.body) {
@@ -51,5 +54,3 @@ export async function streamChat({
     if (chunk) onChunk(chunk);
   }
 }
-
-

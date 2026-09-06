@@ -8,18 +8,18 @@ import { formatPrice } from "@/utils/price";
 
 import type { Product } from "@/types/product";
 
-
 interface ProductDetailHeaderProps {
   product: Product;
   onBack: () => void;
   onRefresh: () => void | Promise<void>;
+  onAskAi: () => void;
 }
-
 
 export function ProductDetailHeader({
   product,
   onBack,
   onRefresh,
+  onAskAi,
 }: ProductDetailHeaderProps) {
   const offers = product.offers ?? [];
   const totalStore = product.store ?? null;
@@ -27,12 +27,10 @@ export function ProductDetailHeader({
   const unit = product.unit ?? null;
   const isNotRun = product.status === "not_run";
 
-
   async function handleDeleted() {
     await onRefresh();
     onBack();
   }
-
 
   return (
     <div className="space-y-5">
@@ -47,7 +45,6 @@ export function ProductDetailHeader({
         Dashboard
       </Button>
 
-
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -57,7 +54,6 @@ export function ProductDetailHeader({
 
             <ProductStatusBadge status={product.status} />
           </div>
-
 
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
@@ -83,17 +79,16 @@ export function ProductDetailHeader({
             )}
           </div>
 
-
           <div className="mt-4">
             <ProductDetailActions
               productId={product.product_id}
               productName={product.name}
               onUpdated={onRefresh}
               onDeleted={handleDeleted}
+              onAskAi={onAskAi}
             />
           </div>
         </div>
-
 
         <div className="shrink-0 lg:text-right">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -112,13 +107,11 @@ export function ProductDetailHeader({
             )}
           </p>
 
-
           {isNotRun && (
             <p className="mt-2 text-sm text-muted-foreground">
               No price data yet
             </p>
           )}
-
 
           {!isNotRun && product.current_unit_price != null && (
             <p className="mt-2 text-sm font-medium text-muted-foreground">
@@ -127,7 +120,6 @@ export function ProductDetailHeader({
               {unit ? `/${unit}` : ""}
             </p>
           )}
-
 
           {!isNotRun && product.url && (
             <a

@@ -1,66 +1,65 @@
 import { useEffect, useRef } from "react";
-import { RefreshCw } from "lucide-react";
+import { Bot, RefreshCw } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-import type { Character, Message } from "@/types/chat";
+import type { Advisor, Message } from "@/types/chat";
 
 interface MessageListProps {
   messages: Message[];
-  selectedCharacter: Character;
+  selectedAdvisor: Advisor;
   isGenerating: boolean;
   onRegenerate: () => void;
 }
 
 export function MessageList({
   messages,
-  selectedCharacter,
+  selectedAdvisor,
   isGenerating,
   onRegenerate,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [messages]);
 
   return (
     <ScrollArea className="h-full">
       <div className="p-5">
         {messages.length === 0 ? (
-          <div className="flex min-h-[360px] items-center justify-center">
+          <div className="flex min-h-[320px] items-center justify-center">
             <div className="max-w-md space-y-4 text-center">
-              <Avatar className="mx-auto size-16">
-                <AvatarFallback className="text-xl">
-                  {selectedCharacter.name.slice(0, 1).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Bot className="size-6" />
+              </div>
 
               <div>
-                <h2 className="text-lg font-semibold">
-                  {selectedCharacter.name}
+                <h2 className="font-semibold">
+                  {selectedAdvisor.name}
                 </h2>
 
-                <p className="text-sm text-muted-foreground">
-                  {selectedCharacter.age}岁 · {selectedCharacter.occupation}
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {selectedAdvisor.description}
                 </p>
               </div>
 
-              {selectedCharacter.greeting && (
-                <p className="text-sm leading-6 text-muted-foreground">
-                  “{selectedCharacter.greeting}”
-                </p>
-              )}
+              <p className="text-sm leading-6 text-muted-foreground">
+                {selectedAdvisor.greeting}
+              </p>
             </div>
           </div>
         ) : (
           <div className="space-y-5">
             {messages.map((message, index) => {
               const isUser = message.role === "user";
+
               const isLastAssistant =
-                message.role === "assistant" && index === messages.length - 1;
+                message.role === "assistant" &&
+                index === messages.length - 1;
 
               return (
                 <div
@@ -93,7 +92,7 @@ export function MessageList({
                           onClick={onRegenerate}
                         >
                           <RefreshCw data-icon="inline-start" />
-                          重新生成
+                          Regenerate
                         </Button>
                       )}
                   </div>
