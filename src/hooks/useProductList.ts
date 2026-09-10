@@ -1,7 +1,30 @@
+/**
+ * File: hooks/useProductList.ts
+ * Purpose:
+ *   Centralizes dashboard product search, lifecycle collection selection,
+ *   price filters, sorting and pagination.
+ *
+ * Main function:
+ *   - useProductList(products): derives the visible product page and exposes
+ *     setters for collection/search/filter/sort/page state.
+ *
+ * Inputs:
+ *   The full merged Product[] from useAppData.
+ *
+ * Outputs:
+ *   Filtered/paginated products plus UI state and update functions.
+ */
+
 import { useMemo, useState } from "react";
 
 import type { Product } from "@/types/product";
 
+
+export type ProductCollection =
+  | "all"
+  | "tracked"
+  | "owned"
+  | "subscription";
 
 export type ProductFilter =
   | "all"
@@ -22,6 +45,7 @@ const PRODUCTS_PER_PAGE = 12;
 
 
 export function useProductList(products: Product[]) {
+  const [collection, setCollectionState] = useState<ProductCollection>("all");
   const [searchQuery, setSearchQueryState] = useState("");
   const [filter, setFilterState] = useState<ProductFilter>("all");
   const [sort, setSortState] = useState<ProductSort>("name");
@@ -32,9 +56,13 @@ export function useProductList(products: Product[]) {
     const query = searchQuery.trim().toLowerCase();
 
     return products
-      .filter(product => matchesSearch(product, query) && matchesFilter(product, filter))
+      .filter(product =>
+        matchesCollection(product, collection) &&
+        matchesSearch(product, query) &&
+        matchesFilter(product, filter)
+      )
       .sort((a, b) => compareProducts(a, b, sort));
-  }, [products, searchQuery, filter, sort]);
+  }, [products, collection, searchQuery, filter, sort]);
 
 
   const totalPages = Math.max(1, Math.ceil(visibleProducts.length / PRODUCTS_PER_PAGE));
@@ -43,6 +71,11 @@ export function useProductList(products: Product[]) {
   const pageEnd = Math.min(pageStart + PRODUCTS_PER_PAGE, visibleProducts.length);
   const paginatedProducts = visibleProducts.slice(pageStart, pageEnd);
 
+
+  function setCollection(value: ProductCollection) {
+    setCollectionState(value);
+    setPage(1);
+  }
 
   function setSearchQuery(value: string) {
     setSearchQueryState(value);
@@ -62,6 +95,8 @@ export function useProductList(products: Product[]) {
 
   return {
     products: paginatedProducts,
+    collection,
+    setCollection,
     searchQuery,
     setSearchQuery,
     filter,
@@ -75,6 +110,12 @@ export function useProductList(products: Product[]) {
     pageStart,
     pageEnd,
   };
+}
+
+
+function matchesCollection(product: Product, collection: ProductCollection): boolean {
+  if (collection === "all") return true;
+  return product.saved_type === collection;
 }
 
 

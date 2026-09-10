@@ -1,3 +1,31 @@
+// ============================================================================
+// File: Program.cs
+// Purpose:
+//   Configures the PriceWatch ASP.NET API and maps all HTTP endpoints. This
+//   refactor adds product lifecycle endpoints without changing scraper execution,
+//   history, email, scheduling, or the existing AI chat contract.
+//
+// Main product functions/endpoints:
+//   - GET    /api/product-config            -> list saved product configs.
+//   - GET    /api/product-config/{id}       -> fetch one config for editing.
+//   - POST   /api/product-config            -> create a tracked product.
+//   - PUT    /api/product-config/{id}       -> update scraper settings only.
+//   - POST   /{id}/mark-owned               -> save purchase lifecycle data.
+//   - POST   /{id}/mark-subscription        -> save subscription lifecycle data.
+//   - POST   /{id}/mark-tracked             -> clear lifecycle data, keep tracking.
+//   - DELETE /api/product-config/{id}       -> delete product configuration.
+//
+// Inputs:
+//   HTTP requests from the React frontend and existing scraper/AI operations.
+//
+// Outputs:
+//   JSON/file/stream HTTP responses. Enums are serialized as camel-case strings
+//   such as "tracked", "owned", "subscription", and "monthly".
+// ============================================================================
+
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 using PriceWatch.Api.DTOs;
 using PriceWatch.Api.Models;
 using PriceWatch.Api.Services;
@@ -9,7 +37,22 @@ var builder = WebApplication.CreateBuilder(args);
 // Services
 // ============================================================
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        );
+    });
+
+// Minimal API responses use a separate JSON options object.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+    );
+});
 
 builder.Services.AddSingleton<AppPaths>();
 builder.Services.AddSingleton<ScraperRunner>();
@@ -294,7 +337,7 @@ app.MapDelete("/api/schedule", async (ScheduleService service) =>
 
 
 // ============================================================
-// Product configuration
+// Product configuration + lifecycle
 // ============================================================
 
 app.MapGet("/api/product-config", async (ProductConfigService service) =>
@@ -302,6 +345,27 @@ app.MapGet("/api/product-config", async (ProductConfigService service) =>
     var products = await service.GetAllAsync();
     return Results.Ok(products);
 });
+
+
+app.MapGet(
+    "/api/product-config/{id}",
+    async (string id, ProductConfigService service) =>
+    {
+        try
+        {
+            var product = await service.GetByIdAsync(id);
+            return Results.Ok(product);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
 
 
 app.MapPost(
@@ -319,10 +383,7 @@ app.MapPost(
         }
         catch (ArgumentException exception)
         {
-            return Results.BadRequest(new
-            {
-                error = exception.Message,
-            });
+            return Results.BadRequest(new { error = exception.Message });
         }
     }
 );
@@ -343,17 +404,82 @@ app.MapPut(
         }
         catch (KeyNotFoundException exception)
         {
-            return Results.NotFound(new
-            {
-                error = exception.Message,
-            });
+            return Results.NotFound(new { error = exception.Message });
         }
         catch (ArgumentException exception)
         {
-            return Results.BadRequest(new
-            {
-                error = exception.Message,
-            });
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/product-config/{id}/mark-owned",
+    async (
+        string id,
+        MarkProductOwnedInput input,
+        ProductConfigService service
+    ) =>
+    {
+        try
+        {
+            var updated = await service.MarkOwnedAsync(id, input);
+            return Results.Ok(updated);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/product-config/{id}/mark-subscription",
+    async (
+        string id,
+        MarkSubscriptionInput input,
+        ProductConfigService service
+    ) =>
+    {
+        try
+        {
+            var updated = await service.MarkSubscriptionAsync(id, input);
+            return Results.Ok(updated);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/product-config/{id}/mark-tracked",
+    async (string id, ProductConfigService service) =>
+    {
+        try
+        {
+            var updated = await service.MarkTrackedAsync(id);
+            return Results.Ok(updated);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
         }
     }
 );
@@ -370,10 +496,7 @@ app.MapDelete(
         }
         catch (KeyNotFoundException)
         {
-            return Results.NotFound(new
-            {
-                error = "Product not found",
-            });
+            return Results.NotFound(new { error = "Product not found" });
         }
     }
 );

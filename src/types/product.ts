@@ -1,17 +1,33 @@
+/**
+ * File: types/product.ts
+ * Purpose:
+ *   Defines frontend product data returned by scraper snapshots after it has been
+ *   merged with persistent ProductConfig lifecycle data.
+ *
+ * Main types:
+ *   - ProductOffer: one store offer from the scraper.
+ *   - Product: dashboard/detail product including price + lifecycle fields.
+ *   - DataFile: latest/history snapshot file.
+ *   - HistoryIndex: available history periods.
+ *
+ * Inputs:
+ *   /api/latest, /api/history and /api/product-config responses.
+ *
+ * Outputs:
+ *   Shared TypeScript types used by product cards, details, history and AI picker.
+ */
+
+import type { BillingInterval, SavedType } from "@/services/productConfigApi";
+
+
 export interface ProductOffer {
   store: string;
   url: string;
-
   price: number;
-
   price_source?: "scrape" | "manual";
-
   unit_quantity?: number | null;
-
   comparison_price?: number | null;
-
   unit_price?: number | null;
-
   note?: string | null;
 }
 
@@ -26,43 +42,30 @@ export interface Product {
   product_id: string;
   name: string;
 
-  // =========================================================
-  // Cheapest total
-  // =========================================================
-
+  // Cheapest total / comparison-total winner.
   url: string;
-
-  // Optional for old history
   store?: string | null;
-
   target_price: number;
-
   current_price: number | null;
   previous_price: number | null;
-
   below_target: boolean | null;
   difference: number | null;
 
-  // =========================================================
-  // Cheapest unit price
-  // =========================================================
-
+  // Cheapest unit-price winner. It may come from a different source.
   unit?: string | null;
-
   unit_url?: string | null;
   unit_store?: string | null;
-
   target_unit_price?: number | null;
-
   current_unit_price?: number | null;
   previous_unit_price?: number | null;
-
   unit_below_target?: boolean | null;
   unit_difference?: number | null;
 
-  // =========================================================
-  // General
-  // =========================================================
+  // Scraper / comparison configuration.
+  comparison_quantity?: number | null;
+  currency: string;
+  offers?: ProductOffer[];
+  error?: ProductError | null;
 
   status:
     | "not_run"
@@ -70,14 +73,13 @@ export interface Product {
     | "failed"
     | "suspicious";
 
-  comparison_quantity?: number | null;
-
-  currency: string;
-
-  // Optional for old history
-  offers?: ProductOffer[];
-
-  error?: ProductError | null;
+  // User lifecycle data merged from ProductConfig.
+  saved_type: SavedType;
+  purchase_price: number | null;
+  purchase_date: string | null;
+  subscription_price: number | null;
+  billing_interval: BillingInterval | null;
+  next_billing_date: string | null;
 }
 
 

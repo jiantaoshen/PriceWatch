@@ -1,11 +1,26 @@
+// ============================================================================
+// File: DTOs/ProductConfigInput.cs
+// Purpose:
+//   Defines the create/edit input for scraper configuration only.
+//   Lifecycle fields such as purchase/subscription data intentionally do NOT
+//   live here, so editing a target price or source cannot accidentally erase
+//   ownership/subscription information.
+//
+// Main types:
+//   - ProductSourceInput: one source entered by the user.
+//   - ProductConfigInput: normal add/edit product form payload.
+//
+// Inputs:
+//   JSON body from POST /api/product-config and PUT /api/product-config/{id}.
+//
+// Outputs:
+//   Validated values mapped by ProductConfigService into ProductConfig.
+// ============================================================================
+
 using System.Text.Json.Serialization;
 
 namespace PriceWatch.Api.DTOs;
 
-
-// =============================================================
-// Product Source
-// =============================================================
 
 public sealed class ProductSourceInput
 {
@@ -15,8 +30,6 @@ public sealed class ProductSourceInput
     [JsonPropertyName("url")]
     public string Url { get; init; } = "";
 
-    // Old clients that do not send this field
-    // should continue scraping.
     [JsonPropertyName("scraping_enabled")]
     public bool ScrapingEnabled { get; init; } = true;
 
@@ -30,9 +43,6 @@ public sealed class ProductSourceInput
     public string? Note { get; init; }
 }
 
-// =============================================================
-// Product Config Input
-// =============================================================
 
 public sealed class ProductConfigInput
 {

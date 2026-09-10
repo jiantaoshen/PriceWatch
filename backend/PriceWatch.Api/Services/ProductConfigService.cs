@@ -1,5 +1,32 @@
+// ============================================================================
+// File: Services/ProductConfigService.cs
+// Purpose:
+//   Owns reading, validating, creating, editing, deleting, and lifecycle updates
+//   for python/products.json. Normal product edits only change scraper settings;
+//   ownership/subscription fields are preserved unless a lifecycle action changes
+//   them explicitly.
+//
+// Main functions:
+//   - GetAllAsync(): returns all saved ProductConfig records.
+//   - GetByIdAsync(id): returns one ProductConfig or throws if it does not exist.
+//   - CreateAsync(input): creates a new Tracked product.
+//   - UpdateAsync(id, input): updates scraper config while preserving lifecycle.
+//   - MarkOwnedAsync(id, input): marks product Owned and clears subscription data.
+//   - MarkSubscriptionAsync(id, input): marks Subscription and clears purchase data.
+//   - MarkTrackedAsync(id): returns product to Tracked and clears lifecycle data.
+//   - DeleteAsync(id): removes a product.
+//
+// Inputs:
+//   ProductConfigInput for scraper configuration and small lifecycle DTOs for
+//   ownership/subscription actions.
+//
+// Outputs:
+//   ProductConfig objects and an atomically rewritten python/products.json file.
+// ============================================================================
+
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using PriceWatch.Api.DTOs;
 using PriceWatch.Api.Models;
@@ -16,6 +43,10 @@ public sealed class ProductConfigService
     {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true,
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
+        },
     };
 
 
@@ -25,9 +56,9 @@ public sealed class ProductConfigService
     }
 
 
-    // ============================================================
-    // Get
-    // ============================================================
+    // ========================================================================
+    // Read
+    // ========================================================================
 
     public async Task<List<ProductConfig>> GetAllAsync()
     {
@@ -54,13 +85,22 @@ public sealed class ProductConfigService
     }
 
 
-    // ============================================================
-    // Create
-    // ============================================================
+    public async Task<ProductConfig> GetByIdAsync(string id)
+    {
+        RequireId(id);
+
+        var products = await GetAllAsync();
+        return FindRequired(products, id);
+    }
+
+
+    // ========================================================================
+    // Create / normal scraper-config update
+    // ========================================================================
 
     public async Task<ProductConfig> CreateAsync(ProductConfigInput input)
     {
-        Validate(input);
+        ValidateProductInput(input);
 
         await _writeLock.WaitAsync();
 
@@ -70,11 +110,11 @@ public sealed class ProductConfigService
 
             var product = MapProduct(
                 GenerateId(products),
-                input
+                input,
+                lifecycleSource: null
             );
 
             products.Add(product);
-
             await SaveAsync(products);
 
             return product;
@@ -86,46 +126,31 @@ public sealed class ProductConfigService
     }
 
 
-    // ============================================================
-    // Update
-    // ============================================================
-
     public async Task<ProductConfig> UpdateAsync(
         string id,
         ProductConfigInput input
     )
     {
         RequireId(id);
-        Validate(input);
+        ValidateProductInput(input);
 
         await _writeLock.WaitAsync();
 
         try
         {
             var products = await GetAllAsync();
+            var index = FindIndexRequired(products, id);
+            var existing = products[index];
 
-            var index = products.FindIndex(
-                product => string.Equals(
-                    product.Id,
-                    id,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            );
-
-            if (index < 0)
-            {
-                throw new KeyNotFoundException(
-                    "Product not found."
-                );
-            }
-
+            // Important: a normal edit only updates scraper-oriented fields.
+            // Purchase/subscription lifecycle data survives the edit.
             var updated = MapProduct(
-                products[index].Id,
-                input
+                existing.Id,
+                input,
+                lifecycleSource: existing
             );
 
             products[index] = updated;
-
             await SaveAsync(products);
 
             return updated;
@@ -137,9 +162,103 @@ public sealed class ProductConfigService
     }
 
 
-    // ============================================================
+    // ========================================================================
+    // Lifecycle actions
+    // ========================================================================
+
+    public async Task<ProductConfig> MarkOwnedAsync(
+        string id,
+        MarkProductOwnedInput input
+    )
+    {
+        RequireId(id);
+        ValidateOptionalPositive(input.PurchasePrice, "Purchase price");
+
+        return await UpdateLifecycleAsync(
+            id,
+            existing => CopyWithLifecycle(
+                existing,
+                savedType: SavedProductType.Owned,
+                purchasePrice: input.PurchasePrice,
+                purchaseDate: input.PurchaseDate,
+                subscriptionPrice: null,
+                billingInterval: null,
+                nextBillingDate: null
+            )
+        );
+    }
+
+
+    public async Task<ProductConfig> MarkSubscriptionAsync(
+        string id,
+        MarkSubscriptionInput input
+    )
+    {
+        RequireId(id);
+        ValidateOptionalPositive(input.SubscriptionPrice, "Subscription price");
+
+        return await UpdateLifecycleAsync(
+            id,
+            existing => CopyWithLifecycle(
+                existing,
+                savedType: SavedProductType.Subscription,
+                purchasePrice: null,
+                purchaseDate: null,
+                subscriptionPrice: input.SubscriptionPrice,
+                billingInterval: input.BillingInterval,
+                nextBillingDate: input.NextBillingDate
+            )
+        );
+    }
+
+
+    public async Task<ProductConfig> MarkTrackedAsync(string id)
+    {
+        RequireId(id);
+
+        return await UpdateLifecycleAsync(
+            id,
+            existing => CopyWithLifecycle(
+                existing,
+                savedType: SavedProductType.Tracked,
+                purchasePrice: null,
+                purchaseDate: null,
+                subscriptionPrice: null,
+                billingInterval: null,
+                nextBillingDate: null
+            )
+        );
+    }
+
+
+    private async Task<ProductConfig> UpdateLifecycleAsync(
+        string id,
+        Func<ProductConfig, ProductConfig> update
+    )
+    {
+        await _writeLock.WaitAsync();
+
+        try
+        {
+            var products = await GetAllAsync();
+            var index = FindIndexRequired(products, id);
+
+            var updated = update(products[index]);
+            products[index] = updated;
+
+            await SaveAsync(products);
+            return updated;
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+
+    // ========================================================================
     // Delete
-    // ============================================================
+    // ========================================================================
 
     public async Task DeleteAsync(string id)
     {
@@ -161,9 +280,7 @@ public sealed class ProductConfigService
 
             if (removed == 0)
             {
-                throw new KeyNotFoundException(
-                    "Product not found."
-                );
+                throw new KeyNotFoundException("Product not found.");
             }
 
             await SaveAsync(products);
@@ -175,9 +292,9 @@ public sealed class ProductConfigService
     }
 
 
-    // ============================================================
-    // Save
-    // ============================================================
+    // ========================================================================
+    // Persistence
+    // ========================================================================
 
     private async Task SaveAsync(List<ProductConfig> products)
     {
@@ -192,11 +309,7 @@ public sealed class ProductConfigService
 
         Directory.CreateDirectory(directory);
 
-        var json = JsonSerializer.Serialize(
-            products,
-            _jsonOptions
-        );
-
+        var json = JsonSerializer.Serialize(products, _jsonOptions);
         var tempFile = _productsFile + ".tmp";
 
         try
@@ -207,11 +320,7 @@ public sealed class ProductConfigService
                 new UTF8Encoding(false)
             );
 
-            File.Move(
-                tempFile,
-                _productsFile,
-                overwrite: true
-            );
+            File.Move(tempFile, _productsFile, overwrite: true);
         }
         finally
         {
@@ -223,17 +332,15 @@ public sealed class ProductConfigService
     }
 
 
-    // ============================================================
+    // ========================================================================
     // Validation
-    // ============================================================
+    // ========================================================================
 
-    private static void Validate(ProductConfigInput input)
+    private static void ValidateProductInput(ProductConfigInput input)
     {
         if (string.IsNullOrWhiteSpace(input.Name))
         {
-            throw new ArgumentException(
-                "Product name is required."
-            );
+            throw new ArgumentException("Product name is required.");
         }
 
         if (input.Sources is null || input.Sources.Count == 0)
@@ -243,38 +350,16 @@ public sealed class ProductConfigService
             );
         }
 
-        RequirePositive(
-            input.TargetPrice,
-            "Target price"
-        );
-
-        if (input.TargetUnitPrice is not null)
-        {
-            RequirePositive(
-                input.TargetUnitPrice.Value,
-                "Target unit price"
-            );
-        }
-
-        if (input.ComparisonQuantity is not null)
-        {
-            RequirePositive(
-                input.ComparisonQuantity.Value,
-                "Comparison quantity"
-            );
-        }
+        RequirePositive(input.TargetPrice, "Target price");
+        ValidateOptionalPositive(input.TargetUnitPrice, "Target unit price");
+        ValidateOptionalPositive(input.ComparisonQuantity, "Comparison quantity");
 
         if (string.IsNullOrWhiteSpace(input.Currency))
         {
-            throw new ArgumentException(
-                "Currency is required."
-            );
+            throw new ArgumentException("Currency is required.");
         }
 
-        var urls = new HashSet<string>(
-            StringComparer.OrdinalIgnoreCase
-        );
-
+        var urls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var hasUnitQuantity = false;
 
         for (var index = 0; index < input.Sources.Count; index++)
@@ -289,29 +374,21 @@ public sealed class ProductConfigService
                 );
             }
 
-            ValidateUrl(
-                source.Url,
-                number,
-                urls
-            );
+            ValidateUrl(source.Url, number, urls);
 
             if (source.UnitQuantity is not null)
             {
                 hasUnitQuantity = true;
-
                 RequirePositive(
                     source.UnitQuantity.Value,
                     $"Store {number}: unit quantity"
                 );
             }
 
-            if (source.ManualPrice is not null)
-            {
-                RequirePositive(
-                    source.ManualPrice.Value,
-                    $"Store {number}: manual price"
-                );
-            }
+            ValidateOptionalPositive(
+                source.ManualPrice,
+                $"Store {number}: manual price"
+            );
 
             var shouldScrape =
                 input.ScrapingEnabled &&
@@ -367,17 +444,24 @@ public sealed class ProductConfigService
 
         if (!urls.Add(trimmed))
         {
-            throw new ArgumentException(
-                "Store URLs must be unique."
-            );
+            throw new ArgumentException("Store URLs must be unique.");
         }
     }
 
 
-    private static void RequirePositive(
-        double value,
+    private static void ValidateOptionalPositive(
+        double? value,
         string label
     )
+    {
+        if (value is not null)
+        {
+            RequirePositive(value.Value, label);
+        }
+    }
+
+
+    private static void RequirePositive(double value, string label)
     {
         if (!double.IsFinite(value) || value <= 0)
         {
@@ -392,16 +476,50 @@ public sealed class ProductConfigService
     {
         if (string.IsNullOrWhiteSpace(id))
         {
-            throw new ArgumentException(
-                "Product ID is required."
-            );
+            throw new ArgumentException("Product ID is required.");
         }
     }
 
 
-    // ============================================================
-    // ID
-    // ============================================================
+    // ========================================================================
+    // Lookup / ID helpers
+    // ========================================================================
+
+    private static ProductConfig FindRequired(
+        IEnumerable<ProductConfig> products,
+        string id
+    )
+    {
+        return products.FirstOrDefault(
+            product => string.Equals(
+                product.Id,
+                id,
+                StringComparison.OrdinalIgnoreCase
+            )
+        ) ?? throw new KeyNotFoundException("Product not found.");
+    }
+
+
+    private static int FindIndexRequired(
+        IReadOnlyList<ProductConfig> products,
+        string id
+    )
+    {
+        for (var index = 0; index < products.Count; index++)
+        {
+            if (string.Equals(
+                products[index].Id,
+                id,
+                StringComparison.OrdinalIgnoreCase
+            ))
+            {
+                return index;
+            }
+        }
+
+        throw new KeyNotFoundException("Product not found.");
+    }
+
 
     private static string GenerateId(
         IEnumerable<ProductConfig> products
@@ -411,8 +529,7 @@ public sealed class ProductConfigService
 
         do
         {
-            id = Guid.NewGuid()
-                .ToString("N")[..16];
+            id = Guid.NewGuid().ToString("N")[..16];
         }
         while (
             products.Any(
@@ -428,19 +545,21 @@ public sealed class ProductConfigService
     }
 
 
-    // ============================================================
+    // ========================================================================
     // Mapping
-    // ============================================================
+    // ========================================================================
 
     private static ProductConfig MapProduct(
         string id,
-        ProductConfigInput input
+        ProductConfigInput input,
+        ProductConfig? lifecycleSource
     )
     {
         return new ProductConfig
         {
             Id = id,
             Name = input.Name.Trim(),
+            SavedType = lifecycleSource?.SavedType ?? SavedProductType.Tracked,
             ScrapingEnabled = input.ScrapingEnabled,
             ComparisonQuantity = input.ComparisonQuantity,
 
@@ -459,10 +578,47 @@ public sealed class ProductConfigService
             TargetPrice = input.TargetPrice,
             TargetUnitPrice = input.TargetUnitPrice,
             Unit = Clean(input.Unit),
+            Currency = input.Currency.Trim().ToUpperInvariant(),
 
-            Currency = input.Currency
-                .Trim()
-                .ToUpperInvariant(),
+            PurchasePrice = lifecycleSource?.PurchasePrice,
+            PurchaseDate = lifecycleSource?.PurchaseDate,
+
+            SubscriptionPrice = lifecycleSource?.SubscriptionPrice,
+            BillingInterval = lifecycleSource?.BillingInterval,
+            NextBillingDate = lifecycleSource?.NextBillingDate,
+        };
+    }
+
+
+    private static ProductConfig CopyWithLifecycle(
+        ProductConfig source,
+        SavedProductType savedType,
+        double? purchasePrice,
+        DateOnly? purchaseDate,
+        double? subscriptionPrice,
+        BillingInterval? billingInterval,
+        DateOnly? nextBillingDate
+    )
+    {
+        return new ProductConfig
+        {
+            Id = source.Id,
+            Name = source.Name,
+            SavedType = savedType,
+            ScrapingEnabled = source.ScrapingEnabled,
+            ComparisonQuantity = source.ComparisonQuantity,
+            Sources = source.Sources,
+            TargetPrice = source.TargetPrice,
+            TargetUnitPrice = source.TargetUnitPrice,
+            Unit = source.Unit,
+            Currency = source.Currency,
+
+            PurchasePrice = purchasePrice,
+            PurchaseDate = purchaseDate,
+
+            SubscriptionPrice = subscriptionPrice,
+            BillingInterval = billingInterval,
+            NextBillingDate = nextBillingDate,
         };
     }
 

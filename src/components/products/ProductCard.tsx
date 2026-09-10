@@ -1,5 +1,26 @@
-import { Check, Minus, Store, TrendingDown } from "lucide-react";
+/**
+ * File: components/products/ProductCard.tsx
+ * Purpose:
+ *   Renders one dashboard product card with total/unit price winners, target
+ *   status, scraper health, and the user's lifecycle state.
+ *
+ * Main functions:
+ *   - ProductCard({ product, onClick }): clickable dashboard card.
+ *   - PriceBlock(...): reusable total/unit price section.
+ *   - TotalTargetBadge(...): total-price target state.
+ *   - UnitTargetBadge(...): unit-price target state.
+ *
+ * Inputs:
+ *   Merged Product object from useAppData and an onClick callback.
+ *
+ * Outputs:
+ *   A Card button that opens product details.
+ */
 
+import { Check, Minus, Store } from "lucide-react";
+
+import { ProductLifecycleBadge } from "@/components/products/ProductLifecycleBadge";
+import { ProductLifecycleCardInfo } from "@/components/products/ProductLifecycleCardInfo";
 import { ProductStatusBadge } from "@/components/products/ProductStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +38,6 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onClick }: ProductCardProps) {
   const currentPrice = product.current_price;
-  const previousPrice = product.previous_price;
   const currentUnitPrice = product.current_unit_price ?? null;
   const totalStore = product.store ?? null;
   const unitStore = product.unit_store ?? null;
@@ -25,14 +45,6 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
   const offers = product.offers ?? [];
   const unitTarget = product.target_unit_price ?? null;
   const isNotRun = product.status === "not_run";
-
-  const priceDrop =
-    !isNotRun &&
-    currentPrice !== null &&
-    previousPrice !== null &&
-    currentPrice < previousPrice
-      ? previousPrice - currentPrice
-      : null;
 
   return (
     <button
@@ -60,7 +72,10 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
               </div>
             </div>
 
-            <ProductStatusBadge status={product.status} />
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <ProductLifecycleBadge savedType={product.saved_type} />
+              <ProductStatusBadge status={product.status} />
+            </div>
           </div>
         </CardHeader>
 
@@ -86,23 +101,8 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
         </CardContent>
 
 
-        <div className="min-h-8 border-t px-5 py-2">
-          {isNotRun ? (
-            <span className="text-xs text-muted-foreground">
-              Run scraper to get the first price
-            </span>
-          ) : priceDrop !== null ? (
-            <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <TrendingDown className="size-3.5" />
-              <span>
-                {formatPrice(priceDrop)} {product.currency} since last check
-              </span>
-            </div>
-          ) : (
-            <span className="text-xs text-muted-foreground/60">
-              No recent price drop
-            </span>
-          )}
+        <div className="min-h-14 border-t px-5 py-3">
+          <ProductLifecycleCardInfo product={product} />
         </div>
 
 

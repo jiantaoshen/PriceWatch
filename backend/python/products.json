@@ -2,6 +2,7 @@
   {
     "id": "0d3919eb71a64921",
     "name": "Inet System G50 R5/5070 Ti",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -17,11 +18,17 @@
     "target_price": 17990,
     "target_unit_price": null,
     "unit": null,
-    "currency": "SEK"
+    "currency": "SEK",
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "2eb30e77766b4bfb",
     "name": "ACO Spotless Skin Clarifying Face \u0026 Body Cleanser 200 ml",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -37,11 +44,17 @@
     "target_price": 100,
     "target_unit_price": null,
     "unit": null,
-    "currency": "SEK"
+    "currency": "SEK",
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "11c1e288557248cd",
     "name": "Flux Original Coolmint XL 1000 ml",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -57,11 +70,17 @@
     "target_price": 79,
     "target_unit_price": null,
     "unit": null,
-    "currency": "SEK"
+    "currency": "SEK",
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "d4fd48e394c64a3d",
     "name": "Webhallen-Config-Core-R5-7500F-RTX-5060Ti-16GB-16GB-1TB-Win-11",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -77,11 +96,17 @@
     "target_price": 12990,
     "target_unit_price": null,
     "unit": null,
-    "currency": "SEK"
+    "currency": "SEK",
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "560b87eee8a441d7",
     "name": "Finish Diskmaskinreng\u00F6ring Lemon 250 ml",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": 2,
     "sources": [
@@ -105,11 +130,17 @@
     "target_price": 50,
     "target_unit_price": 26.95,
     "unit": "pcs",
-    "currency": "SEK"
+    "currency": "SEK",
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "ae189920285f4431",
     "name": "Fiberkudde 50x60 Hoie DOWNLIKE ECO",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -125,6 +156,11 @@
     "target_price": 320,
     "target_unit_price": null,
     "unit": null,
-    "currency": "SEK"
+    "currency": "SEK",
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   }
 ]

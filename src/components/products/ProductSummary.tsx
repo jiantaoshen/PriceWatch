@@ -1,3 +1,20 @@
+/**
+ * File: components/products/ProductSummary.tsx
+ * Purpose:
+ *   Gives a price-focused overview of the complete saved-product library.
+ *   Lifecycle counts live in ProductCollectionTabs, while these cards continue
+ *   showing the PriceWatch signals that matter across every saved product.
+ *
+ * Main function:
+ *   - ProductSummary({ products }): computes and renders dashboard price metrics.
+ *
+ * Inputs:
+ *   All merged Product records.
+ *
+ * Outputs:
+ *   Four read-only summary cards: saved products, total targets, unit targets and drops.
+ */
+
 import { Package, Target, TrendingDown, Weight } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,9 +38,9 @@ interface SummaryItem {
 export function ProductSummary({ products }: ProductSummaryProps) {
   const items: SummaryItem[] = [
     {
-      title: "Products",
+      title: "Saved",
       value: products.length,
-      subtitle: "Tracked products",
+      subtitle: "Across all lifecycle states",
       icon: Package,
     },
     {

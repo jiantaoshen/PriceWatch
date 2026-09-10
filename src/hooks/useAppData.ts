@@ -1,3 +1,22 @@
+/**
+ * File: hooks/useAppData.ts
+ * Purpose:
+ *   Loads PriceWatch dashboard data and merges scraper snapshots with persistent
+ *   product configuration. The scraper remains unaware of owned/subscription
+ *   fields; this hook adds them to the final frontend Product object.
+ *
+ * Main functions:
+ *   - mergeDashboardProducts(latest, configs): merge latest scraper result + config.
+ *   - useAppData(): fetch latest prices, configs, history index/data and run status.
+ *   - refresh(showLoading): reload all dashboard data after edits/lifecycle actions.
+ *
+ * Inputs:
+ *   API responses from latest, product-config, history and run endpoints.
+ *
+ * Outputs:
+ *   latestData, historyData, latestRun, loading/error state, and refresh().
+ */
+
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchHistoryIndex, fetchHistoryPeriod } from "@/services/historyData";
@@ -42,6 +61,15 @@ function mergeDashboardProducts(
       latestById.get(config.id) ??
       latestByName.get(config.name.trim().toLowerCase());
 
+    const lifecycle = {
+      saved_type: config.saved_type ?? "tracked" as const,
+      purchase_price: config.purchase_price ?? null,
+      purchase_date: config.purchase_date ?? null,
+      subscription_price: config.subscription_price ?? null,
+      billing_interval: config.billing_interval ?? null,
+      next_billing_date: config.next_billing_date ?? null,
+    };
+
     if (latest) {
       return {
         ...latest,
@@ -52,6 +80,7 @@ function mergeDashboardProducts(
         target_unit_price: config.target_unit_price,
         unit: config.unit,
         currency: config.currency,
+        ...lifecycle,
       };
     }
 
@@ -82,9 +111,10 @@ function mergeDashboardProducts(
 
       status: "not_run",
       currency: config.currency,
-
       offers: [],
       error: null,
+
+      ...lifecycle,
     };
   });
 

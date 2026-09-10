@@ -1,6 +1,23 @@
+/**
+ * File: components/products/ProductDetailHeader.tsx
+ * Purpose:
+ *   Renders the product detail page header, scraper status, lifecycle badge,
+ *   winner store information, current price and all product actions.
+ *
+ * Main function:
+ *   - ProductDetailHeader(props): detail header UI.
+ *
+ * Inputs:
+ *   Merged Product plus navigation/refresh/Ask AI callbacks.
+ *
+ * Outputs:
+ *   Header UI and action callbacks to ProductDetail.
+ */
+
 import { ArrowLeft, ExternalLink, Store } from "lucide-react";
 
 import { ProductDetailActions } from "@/components/products/ProductDetailActions";
+import { ProductLifecycleBadge } from "@/components/products/ProductLifecycleBadge";
 import { ProductStatusBadge } from "@/components/products/ProductStatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -8,12 +25,14 @@ import { formatPrice } from "@/utils/price";
 
 import type { Product } from "@/types/product";
 
+
 interface ProductDetailHeaderProps {
   product: Product;
   onBack: () => void;
   onRefresh: () => void | Promise<void>;
   onAskAi: () => void;
 }
+
 
 export function ProductDetailHeader({
   product,
@@ -27,10 +46,12 @@ export function ProductDetailHeader({
   const unit = product.unit ?? null;
   const isNotRun = product.status === "not_run";
 
+
   async function handleDeleted() {
     await onRefresh();
     onBack();
   }
+
 
   return (
     <div className="space-y-5">
@@ -52,6 +73,7 @@ export function ProductDetailHeader({
               {product.name}
             </h1>
 
+            <ProductLifecycleBadge savedType={product.saved_type} />
             <ProductStatusBadge status={product.status} />
           </div>
 
@@ -81,8 +103,7 @@ export function ProductDetailHeader({
 
           <div className="mt-4">
             <ProductDetailActions
-              productId={product.product_id}
-              productName={product.name}
+              product={product}
               onUpdated={onRefresh}
               onDeleted={handleDeleted}
               onAskAi={onAskAi}

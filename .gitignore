@@ -62,6 +62,7 @@ application_default_credentials.json
 
 data/
 python/products.json
+price_watch_ai/
 
 
 # =========================

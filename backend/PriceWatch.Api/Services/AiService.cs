@@ -1,9 +1,31 @@
+// ============================================================================
+// File: Services/AiService.cs
+// Purpose:
+//   Bridges the ASP.NET API to the existing PriceWatch AI service. This file is
+//   intentionally kept compatible with the currently frozen V10.3 AI payload;
+//   richer lifecycle/unit facts are prepared in AiProductContextService but are
+//   not forwarded here until the external AI contract is deliberately updated.
+//
+// Main functions:
+//   - GetAdvisorsAsync(token): fetches advisor metadata from the AI service.
+//   - StreamChatAsync(request, stream, token): sends the current V10.3-compatible
+//     product/chat payload and streams the AI response back to the frontend.
+//   - EnsureSuccessAsync(...): converts non-success AI responses into exceptions.
+//
+// Inputs:
+//   AiChatPayload containing advisor ID, selected products, and chat messages.
+//
+// Outputs:
+//   AdvisorDto list or streamed text from the AI backend.
+// ============================================================================
+
 using System.Net.Http.Json;
 using System.Text.Json;
 
 using PriceWatch.Api.Models;
 
 namespace PriceWatch.Api.Services;
+
 
 public sealed class AiService : IAiService
 {
@@ -15,6 +37,7 @@ public sealed class AiService : IAiService
         PropertyNameCaseInsensitive = true,
     };
 
+
     public AiService(
         HttpClient httpClient,
         ILogger<AiService> logger
@@ -23,6 +46,7 @@ public sealed class AiService : IAiService
         _httpClient = httpClient;
         _logger = logger;
     }
+
 
     public async Task<IReadOnlyList<AdvisorDto>> GetAdvisorsAsync(
         CancellationToken cancellationToken
@@ -45,6 +69,7 @@ public sealed class AiService : IAiService
         return advisors ?? [];
     }
 
+
     public async Task StreamChatAsync(
         AiChatPayload request,
         Stream outputStream,
@@ -58,6 +83,8 @@ public sealed class AiService : IAiService
             request.Messages.Count
         );
 
+        // Keep the external AI request shape frozen for now. The new fields in
+        // AiProductContext can be wired in later together with the AI server/prompt.
         var payload = new
         {
             advisor_id = request.AdvisorId,
@@ -129,6 +156,7 @@ public sealed class AiService : IAiService
             await outputStream.FlushAsync(cancellationToken);
         }
     }
+
 
     private async Task EnsureSuccessAsync(
         HttpResponseMessage response,

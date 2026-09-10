@@ -1,7 +1,24 @@
+/**
+ * File: components/products/ProductDetail.tsx
+ * Purpose:
+ *   Composes the complete product detail page: header/actions, small lifecycle
+ *   summary, price statistics, offers, total/unit history charts and history table.
+ *
+ * Main function:
+ *   - ProductDetail(props): product detail page composition.
+ *
+ * Inputs:
+ *   Selected Product, all history snapshots, and navigation/action callbacks.
+ *
+ * Outputs:
+ *   Product detail UI. No data is persisted directly from this component.
+ */
+
 import { Play } from "lucide-react";
 
 import { ProductDetailHeader } from "@/components/products/ProductDetailHeader";
 import { ProductHistoryTable } from "@/components/products/ProductHistoryTable";
+import { ProductLifecycleSummary } from "@/components/products/ProductLifecycleSummary";
 import { ProductOffers } from "@/components/products/ProductOffers";
 import { ProductPriceChart } from "@/components/products/ProductPriceChart";
 import { ProductPriceStats } from "@/components/products/ProductPriceStats";
@@ -42,6 +59,8 @@ export function ProductDetail({
         onRefresh={onRefresh}
         onAskAi={onAskAi}
       />
+
+      <ProductLifecycleSummary product={product} />
 
       <Separator />
 

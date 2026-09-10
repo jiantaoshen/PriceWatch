@@ -1,3 +1,22 @@
+/**
+ * File: components/products/ProductFormDialog.tsx
+ * Purpose:
+ *   Opens the existing scraper-oriented add/edit product form. Lifecycle fields
+ *   are intentionally excluded so editing sources or targets cannot overwrite
+ *   ownership/subscription information.
+ *
+ * Main functions:
+ *   - ProductFormDialog(props): controls create/edit dialog state.
+ *   - handleOpen(): loads one ProductConfig when editing.
+ *   - handleSubmit(): creates or updates scraper configuration.
+ *
+ * Inputs:
+ *   mode, optional productId, and optional onSaved callback.
+ *
+ * Outputs:
+ *   Created/updated ProductConfig through the product-config API and callback.
+ */
+
 import { useState } from "react";
 import { Pencil, Plus } from "lucide-react";
 
@@ -14,7 +33,7 @@ import {
 import { useProductForm } from "@/hooks/useProductForm";
 import {
   createProductConfig,
-  fetchProductConfigs,
+  fetchProductConfig,
   updateProductConfig,
 } from "@/services/productConfigApi";
 
@@ -78,13 +97,7 @@ export function ProductFormDialog({
     try {
       setLoading(true);
 
-      const products = await fetchProductConfigs();
-      const product = products.find(item => item.id === productId);
-
-      if (!product) {
-        throw new Error("Product configuration not found.");
-      }
-
+      const product = await fetchProductConfig(productId);
       productForm.loadProduct(product);
       setOpen(true);
     }
