@@ -1,3 +1,19 @@
+/**
+ * File: hooks/useProductHistory.ts
+ * Purpose:
+ *   Builds total/unit history and statistics from accepted history snapshots.
+ *   Suspicious/failed latest candidates are never used as historical fallback.
+ *
+ * Main function:
+ *   - useProductHistory(product, history): returns chart points and low/high/average.
+ *
+ * Inputs:
+ *   Merged Product plus accepted history DataFile snapshots.
+ *
+ * Outputs:
+ *   History rows, chart points, and total/unit price statistics.
+ */
+
 import { useMemo } from "react";
 
 import type { DataFile, Product } from "@/types/product";
@@ -54,6 +70,10 @@ export function useProductHistory(product: Product, history: DataFile[]) {
 
     const totalPrices = totalChartData.map(item => item.value);
     const unitPrices = unitChartData.map(item => item.value);
+    const acceptedCurrentPrice =
+      product.status === "success" ? product.current_price : null;
+    const acceptedCurrentUnitPrice =
+      product.status === "success" ? product.current_unit_price ?? null : null;
 
     return {
       historyPoints,
@@ -62,28 +82,27 @@ export function useProductHistory(product: Product, history: DataFile[]) {
 
       totalLow: totalPrices.length
         ? Math.min(...totalPrices)
-        : product.current_price,
+        : acceptedCurrentPrice,
 
       totalHigh: totalPrices.length
         ? Math.max(...totalPrices)
-        : product.current_price,
+        : acceptedCurrentPrice,
 
       totalAverage:
         average(totalPrices) ??
-        product.current_price,
+        acceptedCurrentPrice,
 
       unitLow: unitPrices.length
         ? Math.min(...unitPrices)
-        : product.current_unit_price ?? null,
+        : acceptedCurrentUnitPrice,
 
       unitHigh: unitPrices.length
         ? Math.max(...unitPrices)
-        : product.current_unit_price ?? null,
+        : acceptedCurrentUnitPrice,
 
       unitAverage:
         average(unitPrices) ??
-        product.current_unit_price ??
-        null,
+        acceptedCurrentUnitPrice,
     };
   }, [
     history,
@@ -91,6 +110,7 @@ export function useProductHistory(product: Product, history: DataFile[]) {
     product.name,
     product.current_price,
     product.current_unit_price,
+    product.status,
   ]);
 }
 

@@ -2,8 +2,9 @@
 // File: Services/AiProductContextService.cs
 // Purpose:
 //   Builds factual AI product context by combining ProductConfig with scraper
-//   latest/history snapshots. It computes both total-price and unit-price history
-//   statistics and adds owned/subscription lifecycle context.
+//   latest/history snapshots. Suspicious/failed latest candidates are never used
+//   as authoritative AI prices; the service falls back to accepted history until
+//   the user confirms or manually resolves the price.
 //
 // Main functions:
 //   - BuildAsync(productIds, token): returns normalized contexts for selected IDs.
@@ -125,6 +126,35 @@ public sealed class AiProductContextService
                 .Select(item => item.UnitPrice!.Value)
                 .ToList();
 
+            var acceptedHistory = history
+                .OrderByDescending(item => item.Date, StringComparer.Ordinal)
+                .ToList();
+
+            var currentIsAccepted = string.Equals(
+                current?.Status,
+                "success",
+                StringComparison.OrdinalIgnoreCase
+            );
+
+            var safeCurrentPrice = currentIsAccepted
+                ? current?.CurrentPrice
+                : acceptedHistory.FirstOrDefault()?.Price;
+
+            var safeCurrentUnitPrice = currentIsAccepted
+                ? current?.CurrentUnitPrice
+                : acceptedHistory.FirstOrDefault()?.UnitPrice;
+
+            var safePreviousPrice = currentIsAccepted
+                ? current?.PreviousPrice
+                : acceptedHistory.Skip(1).FirstOrDefault()?.Price;
+
+            var safePreviousUnitPrice = currentIsAccepted
+                ? current?.PreviousUnitPrice
+                : acceptedHistory
+                    .Skip(1)
+                    .FirstOrDefault(item => item.UnitPrice is not null)
+                    ?.UnitPrice;
+
             result.Add(new AiProductContext
             {
                 ProductId = config.Id,
@@ -135,27 +165,27 @@ public sealed class AiProductContextService
                 ComparisonQuantity = config.ComparisonQuantity,
                 Unit = config.Unit,
 
-                CurrentPrice = current?.CurrentPrice,
+                CurrentPrice = safeCurrentPrice,
                 TargetPrice = config.TargetPrice,
-                PreviousPrice = current?.PreviousPrice,
-                HistoricalLow = MinOrFallback(prices, current?.CurrentPrice),
-                HistoricalHigh = MaxOrFallback(prices, current?.CurrentPrice),
-                HistoricalAverage = AverageOrFallback(prices, current?.CurrentPrice),
+                PreviousPrice = safePreviousPrice,
+                HistoricalLow = MinOrFallback(prices, safeCurrentPrice),
+                HistoricalHigh = MaxOrFallback(prices, safeCurrentPrice),
+                HistoricalAverage = AverageOrFallback(prices, safeCurrentPrice),
 
-                CurrentUnitPrice = current?.CurrentUnitPrice,
+                CurrentUnitPrice = safeCurrentUnitPrice,
                 TargetUnitPrice = config.TargetUnitPrice,
-                PreviousUnitPrice = current?.PreviousUnitPrice,
+                PreviousUnitPrice = safePreviousUnitPrice,
                 HistoricalLowUnitPrice = MinOrFallback(
                     unitPrices,
-                    current?.CurrentUnitPrice
+                    safeCurrentUnitPrice
                 ),
                 HistoricalHighUnitPrice = MaxOrFallback(
                     unitPrices,
-                    current?.CurrentUnitPrice
+                    safeCurrentUnitPrice
                 ),
                 HistoricalAverageUnitPrice = AverageOrFallback(
                     unitPrices,
-                    current?.CurrentUnitPrice
+                    safeCurrentUnitPrice
                 ),
 
                 PurchasePrice = config.PurchasePrice,
@@ -322,6 +352,9 @@ public sealed class AiProductContextService
 
         [JsonPropertyName("name")]
         public string Name { get; init; } = "";
+
+        [JsonPropertyName("status")]
+        public string Status { get; init; } = "success";
 
         [JsonPropertyName("current_price")]
         public double? CurrentPrice { get; init; }

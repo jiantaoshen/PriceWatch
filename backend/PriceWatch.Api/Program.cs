@@ -1,9 +1,9 @@
 // ============================================================================
 // File: Program.cs
 // Purpose:
-//   Configures the PriceWatch ASP.NET API and maps all HTTP endpoints. This
-//   refactor adds product lifecycle endpoints without changing scraper execution,
-//   history, email, scheduling, or the existing AI chat contract.
+//   Configures the PriceWatch ASP.NET API and maps all HTTP endpoints, including
+//   product lifecycle and price-review actions. Suspicious-price confirmation is
+//   handled here without changing the existing external AI chat contract.
 //
 // Main product functions/endpoints:
 //   - GET    /api/product-config            -> list saved product configs.
@@ -13,6 +13,8 @@
 //   - POST   /{id}/mark-owned               -> save purchase lifecycle data.
 //   - POST   /{id}/mark-subscription        -> save subscription lifecycle data.
 //   - POST   /{id}/mark-tracked             -> clear lifecycle data, keep tracking.
+//   - POST   /{id}/price-review/accept       -> accept a suspicious scraped price.
+//   - POST   /{id}/price-review/manual       -> save a trusted manual source price.
 //   - DELETE /api/product-config/{id}       -> delete product configuration.
 //
 // Inputs:
@@ -58,6 +60,7 @@ builder.Services.AddSingleton<AppPaths>();
 builder.Services.AddSingleton<ScraperRunner>();
 builder.Services.AddSingleton<ScheduleService>();
 builder.Services.AddSingleton<ProductConfigService>();
+builder.Services.AddSingleton<PriceReviewService>();
 builder.Services.AddSingleton<EmailSettingsService>();
 builder.Services.AddSingleton<AiProductContextService>();
 
@@ -471,6 +474,81 @@ app.MapPost(
         try
         {
             var updated = await service.MarkTrackedAsync(id);
+            return Results.Ok(updated);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+// ============================================================
+// Price review
+// ============================================================
+
+app.MapPost(
+    "/api/product-config/{id}/price-review/accept",
+    async (
+        string id,
+        PriceReviewService reviewService,
+        ScraperRunner runner
+    ) =>
+    {
+        if (runner.IsRunning)
+        {
+            return Results.Conflict(new
+            {
+                error = "Wait for the current price check to finish before confirming a price.",
+            });
+        }
+
+        try
+        {
+            var confirmed = await reviewService.AcceptSuspiciousPriceAsync(id);
+            return Results.Ok(confirmed);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Conflict(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/product-config/{id}/price-review/manual",
+    async (
+        string id,
+        SetManualSourcePriceInput input,
+        ProductConfigService service,
+        ScraperRunner runner
+    ) =>
+    {
+        if (runner.IsRunning)
+        {
+            return Results.Conflict(new
+            {
+                error = "Wait for the current price check to finish before changing a source to manual price mode.",
+            });
+        }
+
+        try
+        {
+            var updated = await service.SetManualSourcePriceAsync(id, input);
             return Results.Ok(updated);
         }
         catch (KeyNotFoundException exception)

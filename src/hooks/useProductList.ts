@@ -141,6 +141,7 @@ function matchesFilter(product: Product, filter: ProductFilter): boolean {
 
   if (filter === "priceDrops") {
     return (
+      product.status === "success" &&
       product.current_price !== null &&
       product.previous_price !== null &&
       product.current_price < product.previous_price
@@ -183,7 +184,7 @@ function getPriceDrop(product: Product): number {
   const current = product.current_price;
   const previous = product.previous_price;
 
-  if (current === null || previous === null) return 0;
+  if (product.status !== "success" || current === null || previous === null) return 0;
 
   return Math.max(previous - current, 0);
 }

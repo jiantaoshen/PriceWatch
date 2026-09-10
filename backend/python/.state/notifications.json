@@ -73,7 +73,7 @@
       "last_suspicious_price": null
     },
     "ae189920285f4431": {
-      "target_alert_active": true,
+      "target_alert_active": false,
       "last_suspicious_price": null
     }
   },

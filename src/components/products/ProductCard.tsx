@@ -45,6 +45,7 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
   const offers = product.offers ?? [];
   const unitTarget = product.target_unit_price ?? null;
   const isNotRun = product.status === "not_run";
+  const needsReview = product.status === "suspicious" || product.status === "failed";
 
   return (
     <button
@@ -67,7 +68,9 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
                 <span>
                   {isNotRun
                     ? "Waiting for first run"
-                    : `${offers.length} ${offers.length === 1 ? "store" : "stores"}`}
+                    : product.status === "failed"
+                      ? "Latest price check needs attention"
+                      : `${offers.length} ${offers.length === 1 ? "store" : "stores"}`}
                 </span>
               </div>
             </div>
@@ -112,6 +115,13 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
               <Minus className="size-3" />
               Waiting for first run
             </Badge>
+          ) : needsReview ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>Open product to review price.</span>
+              {product.previous_price !== null && (
+                <span>Last accepted: {formatPrice(product.previous_price)} {product.currency}</span>
+              )}
+            </div>
           ) : (
             <>
               <TotalTargetBadge

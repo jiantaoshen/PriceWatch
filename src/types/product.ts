@@ -67,6 +67,11 @@ export interface Product {
   offers?: ProductOffer[];
   error?: ProductError | null;
 
+  // Optional audit fields added when a suspicious price is confirmed by user.
+  reviewed_by_user?: boolean;
+  review_method?: "confirmed" | "manual" | null;
+  reviewed_at?: string | null;
+
   status:
     | "not_run"
     | "success"

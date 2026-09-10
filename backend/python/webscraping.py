@@ -1,3 +1,25 @@
+"""
+File: webscraping.py
+Purpose:
+    Runs PriceWatch scraping, validates large price jumps, writes latest status
+    for every product, and writes only accepted/successful prices to history.
+    Suspicious/failed products remain visible so users can review them instead
+    of being mistaken for products that have never run.
+
+Main functions:
+    - check_source(...): scrape or read one manual store price.
+    - check_product(...): choose winners, validate price, return success/failed/suspicious.
+    - run_product(...): record every latest result and accepted history results separately.
+    - main(): run all products and atomically persist latest/run/history files.
+
+Inputs:
+    python/products.json plus scraped/manual source prices and existing accepted history.
+
+Outputs:
+    data/latest.json (all statuses), data/history/*.json (accepted prices only),
+    run metadata, debug artifacts, and optional notifications.
+"""
+
 import asyncio
 import json
 import os
@@ -396,6 +418,19 @@ async def check_product(page, product, period):
     comparison_raw = product.get("comparison_quantity")
     comparison_quantity = positive_float(comparison_raw)
 
+    # Read the newest accepted baseline before any source can fail. This allows
+    # failed results to still tell the frontend what the last valid price was.
+    previous_price = get_previous_price(
+        history_dir=HISTORY_DIR,
+        current_period=period,
+        product_id=product_id,
+    )
+    previous_unit_price = get_previous_unit_price(
+        history_dir=HISTORY_DIR,
+        current_period=period,
+        product_id=product_id,
+    )
+
     if comparison_raw is not None and comparison_quantity is None:
         message = "comparison_quantity must be greater than 0"
         return make_result(
@@ -406,6 +441,8 @@ async def check_product(page, product, period):
             status="failed",
             unit=unit,
             target_unit_price=target_unit_price,
+            previous_price=previous_price,
+            previous_unit_price=previous_unit_price,
             error=make_error("INVALID_COMPARISON_QUANTITY", message),
         )
 
@@ -435,6 +472,8 @@ async def check_product(page, product, period):
             status="failed",
             unit=unit,
             target_unit_price=target_unit_price,
+            previous_price=previous_price,
+            previous_unit_price=previous_unit_price,
             error=make_error("NO_URL", "No product URLs configured"),
         )
 
@@ -470,6 +509,8 @@ async def check_product(page, product, period):
             url=sources[0]["url"],
             unit=unit,
             target_unit_price=target_unit_price,
+            previous_price=previous_price,
+            previous_unit_price=previous_unit_price,
             error=make_error("ALL_SOURCES_FAILED", message),
         )
 
@@ -490,6 +531,8 @@ async def check_product(page, product, period):
             url=offers[0]["url"],
             unit=unit,
             target_unit_price=target_unit_price,
+            previous_price=previous_price,
+            previous_unit_price=previous_unit_price,
             offers=offers,
             error=make_error("NO_COMPARABLE_OFFERS", message),
         )
@@ -514,17 +557,6 @@ async def check_product(page, product, period):
 
     if len(offers) < len(sources):
         print(f"⚠️ Successful sources: {len(offers)}/{len(sources)}")
-
-    previous_price = get_previous_price(
-        history_dir=HISTORY_DIR,
-        current_period=period,
-        product_id=product_id,
-    )
-    previous_unit_price = get_previous_unit_price(
-        history_dir=HISTORY_DIR,
-        current_period=period,
-        product_id=product_id,
-    )
 
     if previous_price is None:
         print("Previous total price: not available")
@@ -555,9 +587,16 @@ async def check_product(page, product, period):
         offers=offers,
     )
 
+    # A manual source price was explicitly entered by the user, so the normal
+    # >80% suspicious-change guard should not reject it. Scraped prices still
+    # go through the full validation rule.
     validation = validate_price(
         price=current_price,
-        previous_price=previous_price,
+        previous_price=(
+            None
+            if best_offer.get("price_source") == "manual"
+            else previous_price
+        ),
     )
 
     if validation.status == PriceValidationStatus.INVALID:
@@ -629,6 +668,37 @@ def save_json(file_path: Path, data) -> None:
         temp_file.unlink(missing_ok=True)
 
 
+def merge_successful_history(period, generated_at, successful_results):
+    """Upsert successful products while preserving last accepted values for failures."""
+    history_file = HISTORY_DIR / f"{period}.json"
+    existing_products = []
+
+    if history_file.exists():
+        try:
+            with history_file.open("r", encoding="utf-8") as file:
+                existing = json.load(file)
+                if isinstance(existing, dict) and isinstance(existing.get("data"), list):
+                    existing_products = existing["data"]
+        except (OSError, json.JSONDecodeError, AttributeError):
+            existing_products = []
+
+    by_id = {
+        item.get("product_id", item.get("name")): item
+        for item in existing_products
+        if isinstance(item, dict)
+    }
+
+    for item in successful_results:
+        key = item.get("product_id", item.get("name"))
+        by_id[key] = item
+
+    return {
+        "period": period,
+        "generated_at": generated_at,
+        "data": list(by_id.values()),
+    }
+
+
 def update_history_index(period):
     periods = []
 
@@ -657,7 +727,8 @@ async def run_product(
     run_id,
     page,
     context,
-    results,
+    latest_results,
+    successful_results,
     counts,
     notification_state,
     notification_events,
@@ -670,10 +741,15 @@ async def run_product(
         await context.tracing.start_chunk(title=f"Price check: {product['name']}")
 
     result = await check_product(page, product, period)
+    serialized = result.model_dump(mode="json")
+
+    # latest.json represents the latest ATTEMPT, not only successful prices.
+    # This is what keeps suspicious/failed products visible in the frontend.
+    latest_results.append(serialized)
 
     if result.status == "success":
         counts["successful"] += 1
-        results.append(result.model_dump(mode="json"))
+        successful_results.append(serialized)
 
         if tracing:
             await context.tracing.stop_chunk()
@@ -720,7 +796,8 @@ async def run_products(
     products,
     period,
     run_id,
-    results,
+    latest_results,
+    successful_results,
     counts,
     notification_state,
     notification_events,
@@ -737,7 +814,8 @@ async def run_products(
                 run_id=run_id,
                 page=None,
                 context=None,
-                results=results,
+                latest_results=latest_results,
+                successful_results=successful_results,
                 counts=counts,
                 notification_state=notification_state,
                 notification_events=notification_events,
@@ -768,7 +846,8 @@ async def run_products(
                     run_id=run_id,
                     page=page,
                     context=context,
-                    results=results,
+                    latest_results=latest_results,
+                    successful_results=successful_results,
                     counts=counts,
                     notification_state=notification_state,
                     notification_events=notification_events,
@@ -806,14 +885,16 @@ async def main():
     print(f"Time: {generated_at}")
     print("=" * 70)
 
-    results = []
+    latest_results = []
+    successful_results = []
     counts = {"successful": 0, "failed": 0, "suspicious": 0}
 
     await run_products(
         products=products,
         period=period,
         run_id=run_id,
-        results=results,
+        latest_results=latest_results,
+        successful_results=successful_results,
         counts=counts,
         notification_state=notification_state,
         notification_events=notification_events,
@@ -854,21 +935,27 @@ async def main():
         notification_state,
     )
 
-    if not results:
-        print("❌ No product prices were collected.")
-        print("Existing local price data will NOT be overwritten.")
-        return
-
-    output = {
+    # latest.json must always reflect the latest ATTEMPT so failed/suspicious
+    # products remain visible and reviewable instead of becoming "Not run yet".
+    latest_output = {
         "period": period,
         "generated_at": generated_at,
-        "data": results,
+        "data": latest_results,
     }
+    save_json(LATEST_FILE, latest_output)
 
     history_file = HISTORY_DIR / f"{period}.json"
-    save_json(history_file, output)
-    update_history_index(period)
-    save_json(LATEST_FILE, output)
+
+    if successful_results:
+        history_output = merge_successful_history(
+            period,
+            generated_at,
+            successful_results,
+        )
+        save_json(history_file, history_output)
+        update_history_index(period)
+    else:
+        print("⚠️ No accepted prices were collected; history was left unchanged.")
 
     print("\n" + "=" * 70)
     print("Run completed")
@@ -881,7 +968,11 @@ async def main():
     print(f"Duration: {run_metadata.duration_seconds:.2f}s")
     print(f"Run metadata: {run_file}")
     print(f"Latest data: {LATEST_FILE}")
-    print(f"History data: {history_file}")
+    print(
+        f"History data: {history_file}"
+        if successful_results
+        else "History data: unchanged (no accepted prices)"
+    )
     print(f"History index: {HISTORY_INDEX_FILE}")
 
 

@@ -1,3 +1,21 @@
+/**
+ * File: components/products/ProductPriceStats.tsx
+ * Purpose:
+ *   Shows total/unit current, target and historical statistics. Suspicious latest
+ *   values are labelled as detected candidates and never shown as above/below target
+ *   until the user confirms them.
+ *
+ * Main functions:
+ *   - ProductPriceStats(props): renders total and unit statistic sections.
+ *   - TargetBadge(...): renders accepted target state or Pending review.
+ *
+ * Inputs:
+ *   Product plus accepted historical low/high/average values.
+ *
+ * Outputs:
+ *   Read-only price statistic cards and target badges.
+ */
+
 import { CheckCircle2, Minus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +69,7 @@ export function ProductPriceStats({
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Stat
-            label="Current"
+            label={product.status === "suspicious" ? "Detected" : "Current"}
             value={formatMoney(product.current_price, product.currency)}
           />
 
@@ -104,7 +122,7 @@ export function ProductPriceStats({
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Stat
-              label="Current"
+              label={product.status === "suspicious" ? "Detected" : "Current"}
               value={formatUnitPrice(currentUnit, product.currency, unit)}
             />
 
@@ -173,6 +191,15 @@ function TargetBadge({
       <Badge variant="outline" className="gap-1">
         <Minus className="size-3" />
         No price
+      </Badge>
+    );
+  }
+
+  if (below == null) {
+    return (
+      <Badge variant="outline" className="gap-1 text-muted-foreground">
+        <Minus className="size-3" />
+        Pending review
       </Badge>
     );
   }

@@ -12,10 +12,10 @@
  *   All merged Product records.
  *
  * Outputs:
- *   Four read-only summary cards: saved products, total targets, unit targets and drops.
+ *   Five read-only summary cards including a Needs Review count.
  */
 
-import { Package, Target, TrendingDown, Weight } from "lucide-react";
+import { AlertTriangle, Package, Target, TrendingDown, Weight } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -56,12 +56,25 @@ export function ProductSummary({ products }: ProductSummaryProps) {
       icon: Weight,
     },
     {
+      title: "Needs Review",
+      value: products.filter(product =>
+        product.status === "suspicious" || product.status === "failed"
+      ).length,
+      subtitle: "Suspicious or unavailable",
+      icon: AlertTriangle,
+    },
+    {
       title: "Price Drops",
       value: products.filter(product => {
         const current = product.current_price;
         const previous = product.previous_price;
 
-        return current !== null && previous !== null && current < previous;
+        return (
+          product.status === "success" &&
+          current !== null &&
+          previous !== null &&
+          current < previous
+        );
       }).length,
       subtitle: "Since last check",
       icon: TrendingDown,
@@ -69,7 +82,7 @@ export function ProductSummary({ products }: ProductSummaryProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
       {items.map(item => (
         <SummaryCard key={item.title} {...item} />
       ))}

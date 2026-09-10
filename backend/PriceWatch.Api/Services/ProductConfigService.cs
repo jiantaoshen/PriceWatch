@@ -1,10 +1,9 @@
 // ============================================================================
 // File: Services/ProductConfigService.cs
 // Purpose:
-//   Owns reading, validating, creating, editing, deleting, and lifecycle updates
-//   for python/products.json. Normal product edits only change scraper settings;
-//   ownership/subscription fields are preserved unless a lifecycle action changes
-//   them explicitly.
+//   Owns reading, validating, creating, editing, deleting, lifecycle updates and
+//   source-level manual price overrides for python/products.json. Normal edits
+//   preserve ownership/subscription fields unless a lifecycle action changes them.
 //
 // Main functions:
 //   - GetAllAsync(): returns all saved ProductConfig records.
@@ -14,11 +13,12 @@
 //   - MarkOwnedAsync(id, input): marks product Owned and clears subscription data.
 //   - MarkSubscriptionAsync(id, input): marks Subscription and clears purchase data.
 //   - MarkTrackedAsync(id): returns product to Tracked and clears lifecycle data.
+//   - SetManualSourcePriceAsync(id, input): switch one source to trusted manual mode.
 //   - DeleteAsync(id): removes a product.
 //
 // Inputs:
-//   ProductConfigInput for scraper configuration and small lifecycle DTOs for
-//   ownership/subscription actions.
+//   ProductConfigInput for scraper configuration, lifecycle DTOs, and
+//   SetManualSourcePriceInput for a user-entered source price.
 //
 // Outputs:
 //   ProductConfig objects and an atomically rewritten python/products.json file.
@@ -247,6 +247,80 @@ public sealed class ProductConfigService
             products[index] = updated;
 
             await SaveAsync(products);
+            return updated;
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+
+    // ========================================================================
+    // Price review / manual source override
+    // ========================================================================
+
+    public async Task<ProductConfig> SetManualSourcePriceAsync(
+        string id,
+        SetManualSourcePriceInput input
+    )
+    {
+        RequireId(id);
+
+        if (string.IsNullOrWhiteSpace(input.SourceUrl))
+        {
+            throw new ArgumentException("Source URL is required.");
+        }
+
+        RequirePositive(input.ManualPrice, "Manual price");
+
+        await _writeLock.WaitAsync();
+
+        try
+        {
+            var products = await GetAllAsync();
+            var index = FindIndexRequired(products, id);
+            var existing = products[index];
+            var sourceUrl = input.SourceUrl.Trim();
+            var found = false;
+
+            var sources = existing.Sources
+                .Select(source =>
+                {
+                    if (!string.Equals(
+                        source.Url,
+                        sourceUrl,
+                        StringComparison.OrdinalIgnoreCase
+                    ))
+                    {
+                        return source;
+                    }
+
+                    found = true;
+
+                    return new ProductSource
+                    {
+                        Store = source.Store,
+                        Url = source.Url,
+                        ScrapingEnabled = false,
+                        ManualPrice = input.ManualPrice,
+                        UnitQuantity = source.UnitQuantity,
+                        Note = source.Note,
+                    };
+                })
+                .ToList();
+
+            if (!found)
+            {
+                throw new ArgumentException(
+                    "The selected source does not belong to this product."
+                );
+            }
+
+            var updated = CopyWithSources(existing, sources);
+            products[index] = updated;
+            await SaveAsync(products);
+
             return updated;
         }
         finally
@@ -619,6 +693,34 @@ public sealed class ProductConfigService
             SubscriptionPrice = subscriptionPrice,
             BillingInterval = billingInterval,
             NextBillingDate = nextBillingDate,
+        };
+    }
+
+
+    private static ProductConfig CopyWithSources(
+        ProductConfig source,
+        List<ProductSource> sources
+    )
+    {
+        return new ProductConfig
+        {
+            Id = source.Id,
+            Name = source.Name,
+            SavedType = source.SavedType,
+            ScrapingEnabled = source.ScrapingEnabled,
+            ComparisonQuantity = source.ComparisonQuantity,
+            Sources = sources,
+            TargetPrice = source.TargetPrice,
+            TargetUnitPrice = source.TargetUnitPrice,
+            Unit = source.Unit,
+            Currency = source.Currency,
+
+            PurchasePrice = source.PurchasePrice,
+            PurchaseDate = source.PurchaseDate,
+
+            SubscriptionPrice = source.SubscriptionPrice,
+            BillingInterval = source.BillingInterval,
+            NextBillingDate = source.NextBillingDate,
         };
     }
 

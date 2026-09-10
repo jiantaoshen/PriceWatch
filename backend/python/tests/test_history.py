@@ -1,3 +1,20 @@
+"""
+File: tests/test_history.py
+Purpose:
+    Verifies accepted price lookup, including current-period baselines created by
+    repeated runs or user confirmation, and legacy name-only history fallback.
+
+Main tests:
+    Previous accepted price, current-period baseline, missing data, ID mismatch,
+    and old history records without product_id.
+
+Inputs:
+    Temporary JSON history files.
+
+Outputs:
+    Pytest assertions for get_previous_price().
+"""
+
 import json
 
 from backend.python.pricewatch.history import (
@@ -73,7 +90,7 @@ def test_previous_price_found(
     assert price == 3490.0
 
 
-def test_current_period_is_skipped(
+def test_current_period_is_used_as_latest_accepted_baseline(
     tmp_path,
 ):
 
@@ -137,9 +154,10 @@ def test_current_period_is_skipped(
         product_id="sony-xm6",
     )
 
-    # Must use previous week,
-    # not current week's 2999.
-    assert price == 3490.0
+    # Current-period history is the last accepted snapshot from an earlier run.
+    # It must be the validation baseline so a user-confirmed price remains trusted
+    # during another scraper run in the same week.
+    assert price == 2999.0
 
 
 def test_missing_history_returns_none(
