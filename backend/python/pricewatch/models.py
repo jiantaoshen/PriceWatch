@@ -1,26 +1,28 @@
 """
 File: pricewatch/models.py
 Purpose:
-    Defines the JSON models emitted by the scraper for latest/history data.
-    Suspicious and failed results can now remain visible in latest.json so the
-    frontend can ask the user to review or manually supply a price.
+    Defines the current JSON models used by PriceWatch. Latest scraper output and
+    accepted historical price data deliberately use separate schemas so history
+    remains a compact time series instead of duplicating the full scraper result.
 
 Main models:
-    - ScrapeError: structured scraper/review error.
-    - Offer: one store offer, including normalized comparison price when available.
-    - ScrapeResult: one product's latest scraper result and review metadata.
+    - ScrapeError: structured scraper/review error shown for failed/suspicious runs.
+    - Offer: one store offer from the latest scraper run.
+    - ScrapeResult: full latest-state record for one product.
+    - PriceHistoryEntry: compact accepted historical price observation.
+    - PriceHistoryFile: one history period containing compact accepted observations.
 
 Inputs:
-    Values assembled by webscraping.py and by user-confirmation API updates.
+    Values assembled by webscraping.py and user-confirmation API updates.
 
 Outputs:
-    Pydantic-validated objects serialized into data/latest.json and accepted
-    history snapshots.
+    ScrapeResult -> data/latest.json.
+    PriceHistoryFile -> data/history/YYYY-MM-DD.json.
 """
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ScrapeError(BaseModel):
@@ -77,7 +79,33 @@ class ScrapeResult(BaseModel):
     offers: list[Offer] = Field(default_factory=list)
     error: ScrapeError | None = None
 
-    # Optional audit information added when the API accepts a suspicious result.
+    # Audit information added when the API accepts a suspicious result.
     reviewed_by_user: bool = False
     review_method: Literal["confirmed", "manual"] | None = None
     reviewed_at: str | None = None
+
+
+class PriceHistoryEntry(BaseModel):
+    """
+    One accepted price observation for a product.
+
+    History intentionally stores only values required to reconstruct price
+    trends/statistics. Product name, target, URL, offers and status belong to
+    products.json or latest.json and are not duplicated here.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    product_id: str
+    current_price: float
+    current_unit_price: float | None = None
+
+
+class PriceHistoryFile(BaseModel):
+    """Compact accepted-price snapshot for one PriceWatch history period."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    period: str
+    generated_at: str
+    data: list[PriceHistoryEntry] = Field(default_factory=list)

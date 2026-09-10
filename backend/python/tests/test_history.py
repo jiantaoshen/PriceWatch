@@ -1,12 +1,12 @@
 """
 File: tests/test_history.py
 Purpose:
-    Verifies accepted price lookup, including current-period baselines created by
-    repeated runs or user confirmation, and legacy name-only history fallback.
+    Verifies accepted price lookup for the current product_id-based history schema,
+    including current-period baselines created by repeated runs or user confirmation.
 
 Main tests:
     Previous accepted price, current-period baseline, missing data, ID mismatch,
-    and old history records without product_id.
+    and strict rejection of records that do not contain product_id.
 
 Inputs:
     Temporary JSON history files.
@@ -225,32 +225,14 @@ def test_product_not_found_returns_none(
     assert price is None
 
 
-def test_old_history_without_product_id_uses_name(
+def test_name_only_history_is_not_matched(
     tmp_path,
 ):
-
-    history_dir = (
-        tmp_path
-        / "history"
-    )
-
+    history_dir = tmp_path / "history"
     history_dir.mkdir()
 
     write_json(
-        history_dir
-        / "index.json",
-        {
-            "periods": [
-                "2026-08-17",
-            ]
-        },
-    )
-
-    # Simulate an old history file from before
-    # product_id was introduced.
-    write_json(
-        history_dir
-        / "2026-08-17.json",
+        history_dir / "2026-08-17.json",
         {
             "data": [
                 {
@@ -264,9 +246,7 @@ def test_old_history_without_product_id_uses_name(
     price = get_previous_price(
         history_dir=history_dir,
         current_period="2026-08-24",
-        product_id=(
-            "Sony WH-1000XM6"
-        ),
+        product_id="sony-xm6",
     )
 
-    assert price == 3490.0
+    assert price is None

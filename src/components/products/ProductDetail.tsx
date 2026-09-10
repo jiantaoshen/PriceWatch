@@ -28,12 +28,12 @@ import { Separator } from "@/components/ui/separator";
 
 import { useProductHistory } from "@/hooks/useProductHistory";
 
-import type { DataFile, Product } from "@/types/product";
+import type { HistoryDataFile, Product } from "@/types/product";
 
 
 interface ProductDetailProps {
   product: Product;
-  history: DataFile[];
+  history: HistoryDataFile[];
   onBack: () => void;
   onRefresh: () => void | Promise<void>;
   onAskAi: () => void;

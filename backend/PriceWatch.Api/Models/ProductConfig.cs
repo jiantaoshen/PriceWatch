@@ -16,7 +16,7 @@
 //
 // Outputs:
 //   Serialized JSON consumed by the ASP.NET API, frontend, and Python scraper.
-//   Existing products without saved_type remain compatible because Tracked = 0.
+//   Persisted data must follow the current schema; legacy missing fields are not inferred.
 // ============================================================================
 
 using System.Text.Json.Serialization;
@@ -71,10 +71,9 @@ public sealed class ProductConfig
     [JsonPropertyName("name")]
     public string Name { get; init; } = "";
 
-    // Old products.json entries do not contain saved_type.
-    // Tracked is enum value 0, so old data stays backward-compatible.
     [JsonPropertyName("saved_type")]
-    public SavedProductType SavedType { get; init; } = SavedProductType.Tracked;
+    [JsonRequired]
+    public SavedProductType SavedType { get; init; }
 
     [JsonPropertyName("scraping_enabled")]
     public bool ScrapingEnabled { get; init; } = true;

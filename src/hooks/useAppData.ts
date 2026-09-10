@@ -1,9 +1,9 @@
 /**
  * File: hooks/useAppData.ts
  * Purpose:
- *   Loads PriceWatch dashboard data and merges scraper snapshots with persistent
- *   product configuration. The scraper remains unaware of owned/subscription
- *   fields; this hook adds them to the final frontend Product object.
+ *   Loads PriceWatch dashboard data and merges current-schema scraper snapshots
+ *   with persistent product configuration by stable product_id only. The scraper
+ *   remains unaware of owned/subscription fields; this hook adds lifecycle data.
  *
  * Main functions:
  *   - mergeDashboardProducts(latest, configs): merge latest scraper result + config.
@@ -25,11 +25,11 @@ import { fetchProductConfigs } from "@/services/productConfigApi";
 import { fetchLatestRun } from "@/services/runData";
 
 import type { ProductConfig } from "@/services/productConfigApi";
-import type { DataFile, HistoryIndex, Product } from "@/types/product";
+import type { HistoryDataFile, HistoryIndex, LatestDataFile, Product } from "@/types/product";
 import type { RunMetadata } from "@/types/run";
 
 
-const EMPTY_DATA: DataFile = {
+const EMPTY_DATA: LatestDataFile = {
   period: "",
   generated_at: "",
   data: [],
@@ -37,9 +37,9 @@ const EMPTY_DATA: DataFile = {
 
 
 function mergeDashboardProducts(
-  latestData: DataFile,
+  latestData: LatestDataFile,
   productConfigs: ProductConfig[],
-): DataFile {
+): LatestDataFile {
   const latestProducts = Array.isArray(latestData.data) ? latestData.data : [];
   const configs = Array.isArray(productConfigs) ? productConfigs : [];
 
@@ -49,25 +49,17 @@ function mergeDashboardProducts(
       .map(product => [product.product_id, product]),
   );
 
-  const latestByName = new Map(
-    latestProducts.map(product => [
-      product.name.trim().toLowerCase(),
-      product,
-    ]),
-  );
 
   const products: Product[] = configs.map(config => {
-    const latest =
-      latestById.get(config.id) ??
-      latestByName.get(config.name.trim().toLowerCase());
+    const latest = latestById.get(config.id);
 
     const lifecycle = {
-      saved_type: config.saved_type ?? "tracked" as const,
-      purchase_price: config.purchase_price ?? null,
-      purchase_date: config.purchase_date ?? null,
-      subscription_price: config.subscription_price ?? null,
-      billing_interval: config.billing_interval ?? null,
-      next_billing_date: config.next_billing_date ?? null,
+      saved_type: config.saved_type,
+      purchase_price: config.purchase_price,
+      purchase_date: config.purchase_date,
+      subscription_price: config.subscription_price,
+      billing_interval: config.billing_interval,
+      next_billing_date: config.next_billing_date,
     };
 
     if (latest) {
@@ -75,7 +67,7 @@ function mergeDashboardProducts(
         ...latest,
         product_id: config.id,
         name: config.name,
-        comparison_quantity: config.comparison_quantity ?? null,
+        comparison_quantity: config.comparison_quantity,
         target_price: config.target_price,
         target_unit_price: config.target_unit_price,
         unit: config.unit,
@@ -84,14 +76,14 @@ function mergeDashboardProducts(
       };
     }
 
-    const firstSource = config.sources?.[0];
+    const firstSource = config.sources[0];
 
     return {
       product_id: config.id,
       name: config.name,
-      comparison_quantity: config.comparison_quantity ?? null,
+      comparison_quantity: config.comparison_quantity,
 
-      url: firstSource?.url ?? config.url ?? "",
+      url: firstSource?.url ?? "",
       store: firstSource?.store ?? null,
 
       target_price: config.target_price,
@@ -113,6 +105,9 @@ function mergeDashboardProducts(
       currency: config.currency,
       offers: [],
       error: null,
+      reviewed_by_user: false,
+      review_method: null,
+      reviewed_at: null,
 
       ...lifecycle,
     };
@@ -126,9 +121,9 @@ function mergeDashboardProducts(
 
 
 export function useAppData() {
-  const [latestData, setLatestData] = useState<DataFile>(EMPTY_DATA);
+  const [latestData, setLatestData] = useState<LatestDataFile>(EMPTY_DATA);
   const [history, setHistory] = useState<HistoryIndex | null>(null);
-  const [historyData, setHistoryData] = useState<DataFile[]>([]);
+  const [historyData, setHistoryData] = useState<HistoryDataFile[]>([]);
   const [latestRun, setLatestRun] = useState<RunMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,7 +157,7 @@ export function useAppData() {
       );
 
       setHistoryData(
-        historyResults.filter((item): item is DataFile => item !== null),
+        historyResults.filter((item): item is HistoryDataFile => item !== null),
       );
     }
     catch (exception) {

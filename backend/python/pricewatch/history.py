@@ -1,25 +1,28 @@
 """
 File: pricewatch/history.py
 Purpose:
-    Reads previously accepted price snapshots from data/history. The current
-    period is intentionally eligible so a user-confirmed suspicious price can
-    become the validation baseline for the next scraper run in the same week.
+    Reads compact accepted price history. Historical records are matched only by
+    stable product_id and contain only current_price/current_unit_price values.
+    The current period remains eligible so a user-confirmed suspicious price can
+    become the validation baseline for another run in the same period.
 
 Main functions:
-    - get_previous_value(...): returns the newest accepted numeric field for one product.
-    - get_previous_price(...): returns the newest accepted total/comparison price.
-    - get_previous_unit_price(...): returns the newest accepted unit price.
+    - get_previous_value(...): return newest accepted numeric history field.
+    - get_previous_price(...): return newest accepted total/comparison price.
+    - get_previous_unit_price(...): return newest accepted unit price.
 
 Inputs:
-    History directory, current ISO period, product ID, and field name.
+    data/history/*.json using the compact PriceHistoryFile schema, an ISO period,
+    stable product ID, and the requested history field.
 
 Outputs:
-    float | None. Suspicious/failed latest results are never written to history,
-    so values returned here are accepted/successful price points only.
+    float | None containing the newest accepted historical value.
 """
 
 import json
 from pathlib import Path
+
+from pricewatch.models import PriceHistoryFile
 
 
 # =============================================================
@@ -27,22 +30,12 @@ from pathlib import Path
 # =============================================================
 
 
-def _read_json(path: Path):
+def _read_history(path: Path) -> PriceHistoryFile | None:
     try:
         with path.open("r", encoding="utf-8") as file:
-            return json.load(file)
+            return PriceHistoryFile.model_validate(json.load(file))
     except Exception:
         return None
-
-
-def _matches_product(product: dict, product_id: str) -> bool:
-    """Match current IDs and old history entries that only stored name."""
-    stored_id = product.get("product_id")
-
-    if stored_id is not None:
-        return stored_id == product_id
-
-    return product.get("name") == product_id
 
 
 # =============================================================
@@ -59,15 +52,17 @@ def get_previous_value(
     """
     Return the newest accepted value up to and including current_period.
 
-    The current period file represents the last accepted snapshot from an
-    earlier run in that period. webscraping.py writes the new period snapshot
-    only after the current run has finished, so using it here does not compare
-    a product against itself.
+    The current-period file contains the last accepted observation from an
+    earlier run in that period. webscraping.py writes the new observation only
+    after the current run finishes, so this does not compare a run with itself.
     """
+    if field not in {"current_price", "current_unit_price"}:
+        raise ValueError(f"Unsupported history field: {field}")
+
     if not history_dir.exists():
         return None
 
-    history_files = []
+    history_files: list[tuple[str, Path]] = []
 
     for path in history_dir.glob("*.json"):
         if path.name == "index.json":
@@ -85,26 +80,17 @@ def get_previous_value(
     history_files.sort(key=lambda item: item[0], reverse=True)
 
     for _, path in history_files:
-        data = _read_json(path)
+        snapshot = _read_history(path)
 
-        if not isinstance(data, dict):
+        if snapshot is None:
             continue
 
-        products = data.get("data")
-
-        if not isinstance(products, list):
-            continue
-
-        for product in products:
-            if not isinstance(product, dict):
+        for product in snapshot.data:
+            if product.product_id != product_id:
                 continue
 
-            if not _matches_product(product, product_id):
-                continue
-
-            value = product.get(field)
-
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
+            value = getattr(product, field)
+            if value is not None:
                 return float(value)
 
     return None

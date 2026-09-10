@@ -19,7 +19,8 @@
  *   ProductConfigInput for scraper settings and small lifecycle action payloads.
  *
  * Outputs:
- *   Normalized ProductConfig objects using snake_case API field names.
+ *   Current-schema ProductConfig objects using the API's snake_case field names.
+ *   Legacy PascalCase/camelCase/product_id fallbacks are intentionally unsupported.
  */
 
 import { apiJson, jsonRequest } from "@/services/api";
@@ -35,8 +36,8 @@ export type BillingInterval = "weekly" | "monthly" | "quarterly" | "yearly";
 export interface ProductSource {
   store: string;
   url: string;
-  scraping_enabled?: boolean;
-  manual_price?: number | null;
+  scraping_enabled: boolean;
+  manual_price: number | null;
   unit_quantity: number | null;
   note: string | null;
 }
@@ -46,8 +47,8 @@ export interface ProductConfig {
   id: string;
   name: string;
   saved_type: SavedType;
-  scraping_enabled?: boolean;
-  comparison_quantity?: number | null;
+  scraping_enabled: boolean;
+  comparison_quantity: number | null;
   sources: ProductSource[];
   target_price: number;
   target_unit_price: number | null;
@@ -61,8 +62,6 @@ export interface ProductConfig {
   billing_interval: BillingInterval | null;
   next_billing_date: string | null;
 
-  // Legacy compatibility only.
-  url?: string;
 }
 
 
@@ -110,7 +109,7 @@ export async function fetchProductConfigs(): Promise<ProductConfig[]> {
     throw new Error("Invalid product configuration response.");
   }
 
-  return products.map(normalizeProduct);
+  return products;
 }
 
 
@@ -120,7 +119,7 @@ export async function fetchProductConfig(id: string): Promise<ProductConfig> {
     { cache: "no-store" },
   );
 
-  return normalizeProduct(product);
+  return product;
 }
 
 
@@ -132,7 +131,7 @@ export async function createProductConfig(
     jsonRequest("POST", input),
   );
 
-  return normalizeProduct(product);
+  return product;
 }
 
 
@@ -145,7 +144,7 @@ export async function updateProductConfig(
     jsonRequest("PUT", input),
   );
 
-  return normalizeProduct(product);
+  return product;
 }
 
 
@@ -158,7 +157,7 @@ export async function markProductOwned(
     jsonRequest("POST", input),
   );
 
-  return normalizeProduct(product);
+  return product;
 }
 
 
@@ -171,7 +170,7 @@ export async function markProductSubscription(
     jsonRequest("POST", input),
   );
 
-  return normalizeProduct(product);
+  return product;
 }
 
 
@@ -181,7 +180,7 @@ export async function markProductTracked(id: string): Promise<ProductConfig> {
     jsonRequest("POST", {}),
   );
 
-  return normalizeProduct(product);
+  return product;
 }
 
 
@@ -190,35 +189,4 @@ export async function deleteProductConfig(id: string): Promise<void> {
     `${PRODUCTS_URL}/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
-}
-
-
-function normalizeProduct(product: ProductConfig): ProductConfig {
-  const raw = product as ProductConfig & {
-    Id?: string;
-    product_id?: string;
-    productId?: string;
-    savedType?: SavedType;
-  };
-
-  const id =
-    product.id ??
-    raw.Id ??
-    raw.product_id ??
-    raw.productId;
-
-  if (!id) {
-    throw new Error(`Product "${product.name}" has no ID.`);
-  }
-
-  return {
-    ...product,
-    id,
-    saved_type: product.saved_type ?? raw.savedType ?? "tracked",
-    purchase_price: product.purchase_price ?? null,
-    purchase_date: product.purchase_date ?? null,
-    subscription_price: product.subscription_price ?? null,
-    billing_interval: product.billing_interval ?? null,
-    next_billing_date: product.next_billing_date ?? null,
-  };
 }

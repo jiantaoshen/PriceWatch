@@ -13,10 +13,11 @@ Main functions:
     - main(): run all products and atomically persist latest/run/history files.
 
 Inputs:
-    python/products.json plus scraped/manual source prices and existing accepted history.
+    Current-format python/products.json, scraped/manual source prices, and accepted history.
+    Product IDs, sources, currency and scraping flags are required by the current schema.
 
 Outputs:
-    data/latest.json (all statuses), data/history/*.json (accepted prices only),
+    data/latest.json (full latest statuses), data/history/*.json (compact accepted prices),
     run metadata, debug artifacts, and optional notifications.
 """
 
@@ -33,7 +34,7 @@ from playwright.async_api import async_playwright
 
 from pricewatch.debug import get_debug_dir, save_debug_artifacts
 from pricewatch.history import get_previous_price, get_previous_unit_price
-from pricewatch.models import ScrapeError, ScrapeResult
+from pricewatch.models import PriceHistoryEntry, PriceHistoryFile, ScrapeError, ScrapeResult
 from pricewatch.notifications import (
     handle_product_notification,
     handle_run_notification,
@@ -90,42 +91,12 @@ def positive_float(value, default=None):
 
 
 def should_scrape_source(product, source) -> bool:
-    return (
-        product.get("scraping_enabled", True)
-        and source.get("scraping_enabled", True)
-    )
+    return product["scraping_enabled"] and source["scraping_enabled"]
 
 
 def get_product_sources(product):
-    if product.get("sources"):
-        return product["sources"]
-
-    if product.get("urls"):
-        return [
-            {
-                "store": f"Source {index + 1}",
-                "url": url,
-                "scraping_enabled": True,
-                "manual_price": None,
-                "unit_quantity": None,
-                "note": None,
-            }
-            for index, url in enumerate(product["urls"])
-        ]
-
-    if product.get("url"):
-        return [
-            {
-                "store": "Source",
-                "url": product["url"],
-                "scraping_enabled": True,
-                "manual_price": None,
-                "unit_quantity": None,
-                "note": None,
-            }
-        ]
-
-    return []
+    """Return sources from the current ProductConfig schema."""
+    return product["sources"]
 
 
 def product_uses_scraper(product) -> bool:
@@ -405,8 +376,8 @@ def print_target_status(
 
 async def check_product(page, product, period):
     name = product["name"]
-    product_id = product.get("id", name)
-    currency = product.get("currency", "SEK")
+    product_id = product["id"]
+    currency = product["currency"]
     target_price = float(product["target_price"])
     unit = product.get("unit")
     target_unit_price = (
@@ -668,29 +639,45 @@ def save_json(file_path: Path, data) -> None:
         temp_file.unlink(missing_ok=True)
 
 
+def to_history_entry(result_data):
+    """Reduce one accepted ScrapeResult dict to the compact history schema."""
+    return PriceHistoryEntry(
+        product_id=result_data["product_id"],
+        current_price=result_data["current_price"],
+        current_unit_price=result_data.get("current_unit_price"),
+    ).model_dump(mode="json")
+
+
 def merge_successful_history(period, generated_at, successful_results):
-    """Upsert successful products while preserving last accepted values for failures."""
+    """
+    Upsert accepted prices into the compact history period.
+
+    Failed/suspicious products keep their last accepted value in the current
+    period; full scraper details remain only in latest.json.
+    """
     history_file = HISTORY_DIR / f"{period}.json"
     existing_products = []
 
     if history_file.exists():
         try:
             with history_file.open("r", encoding="utf-8") as file:
-                existing = json.load(file)
-                if isinstance(existing, dict) and isinstance(existing.get("data"), list):
-                    existing_products = existing["data"]
-        except (OSError, json.JSONDecodeError, AttributeError):
+                existing = PriceHistoryFile.model_validate(json.load(file))
+                existing_products = [
+                    item.model_dump(mode="json")
+                    for item in existing.data
+                ]
+        except Exception:
             existing_products = []
 
     by_id = {
-        item.get("product_id", item.get("name")): item
+        item["product_id"]: item
         for item in existing_products
-        if isinstance(item, dict)
+        if isinstance(item, dict) and "product_id" in item
     }
 
     for item in successful_results:
-        key = item.get("product_id", item.get("name"))
-        by_id[key] = item
+        history_entry = to_history_entry(item)
+        by_id[history_entry["product_id"]] = history_entry
 
     return {
         "period": period,
@@ -733,7 +720,7 @@ async def run_product(
     notification_state,
     notification_events,
 ):
-    product_id = product.get("id", product["name"])
+    product_id = product["id"]
     uses_scraper = product_uses_scraper(product)
     tracing = context is not None and uses_scraper
 

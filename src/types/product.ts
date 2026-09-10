@@ -7,11 +7,13 @@
  * Main types:
  *   - ProductOffer: one store offer from the scraper.
  *   - Product: dashboard/detail product including price + lifecycle fields.
- *   - DataFile: latest/history snapshot file.
+ *   - LatestDataFile: full latest scraper snapshot used by dashboard/detail UI.
+ *   - PriceHistoryEntry / HistoryDataFile: compact accepted price time series.
  *   - HistoryIndex: available history periods.
  *
  * Inputs:
- *   /api/latest, /api/history and /api/product-config responses.
+ *   /api/latest (full scraper state), /api/history (compact price history),
+ *   and /api/product-config responses.
  *
  * Outputs:
  *   Shared TypeScript types used by product cards, details, history and AI picker.
@@ -24,11 +26,11 @@ export interface ProductOffer {
   store: string;
   url: string;
   price: number;
-  price_source?: "scrape" | "manual";
-  unit_quantity?: number | null;
-  comparison_price?: number | null;
-  unit_price?: number | null;
-  note?: string | null;
+  price_source: "scrape" | "manual";
+  unit_quantity: number | null;
+  comparison_price: number | null;
+  unit_price: number | null;
+  note: string | null;
 }
 
 
@@ -44,7 +46,7 @@ export interface Product {
 
   // Cheapest total / comparison-total winner.
   url: string;
-  store?: string | null;
+  store: string | null;
   target_price: number;
   current_price: number | null;
   previous_price: number | null;
@@ -52,25 +54,25 @@ export interface Product {
   difference: number | null;
 
   // Cheapest unit-price winner. It may come from a different source.
-  unit?: string | null;
-  unit_url?: string | null;
-  unit_store?: string | null;
-  target_unit_price?: number | null;
-  current_unit_price?: number | null;
-  previous_unit_price?: number | null;
-  unit_below_target?: boolean | null;
-  unit_difference?: number | null;
+  unit: string | null;
+  unit_url: string | null;
+  unit_store: string | null;
+  target_unit_price: number | null;
+  current_unit_price: number | null;
+  previous_unit_price: number | null;
+  unit_below_target: boolean | null;
+  unit_difference: number | null;
 
   // Scraper / comparison configuration.
-  comparison_quantity?: number | null;
+  comparison_quantity: number | null;
   currency: string;
-  offers?: ProductOffer[];
-  error?: ProductError | null;
+  offers: ProductOffer[];
+  error: ProductError | null;
 
-  // Optional audit fields added when a suspicious price is confirmed by user.
-  reviewed_by_user?: boolean;
-  review_method?: "confirmed" | "manual" | null;
-  reviewed_at?: string | null;
+  // Audit fields emitted by the current scraper schema.
+  reviewed_by_user: boolean;
+  review_method: "confirmed" | "manual" | null;
+  reviewed_at: string | null;
 
   status:
     | "not_run"
@@ -88,10 +90,24 @@ export interface Product {
 }
 
 
-export interface DataFile {
+export interface LatestDataFile {
   period: string;
   generated_at: string;
   data: Product[];
+}
+
+
+export interface PriceHistoryEntry {
+  product_id: string;
+  current_price: number;
+  current_unit_price: number | null;
+}
+
+
+export interface HistoryDataFile {
+  period: string;
+  generated_at: string;
+  data: PriceHistoryEntry[];
 }
 
 

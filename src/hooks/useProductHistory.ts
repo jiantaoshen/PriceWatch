@@ -8,7 +8,7 @@
  *   - useProductHistory(product, history): returns chart points and low/high/average.
  *
  * Inputs:
- *   Merged Product plus accepted history DataFile snapshots.
+ *   Merged Product plus compact accepted HistoryDataFile snapshots.
  *
  * Outputs:
  *   History rows, chart points, and total/unit price statistics.
@@ -16,7 +16,7 @@
 
 import { useMemo } from "react";
 
-import type { DataFile, Product } from "@/types/product";
+import type { HistoryDataFile, Product } from "@/types/product";
 
 
 export interface ProductHistoryPoint {
@@ -31,15 +31,13 @@ export interface PriceChartPoint {
 }
 
 
-export function useProductHistory(product: Product, history: DataFile[]) {
+export function useProductHistory(product: Product, history: HistoryDataFile[]) {
   return useMemo(() => {
     const historyPoints: ProductHistoryPoint[] = [...history]
       .sort((a, b) => a.period.localeCompare(b.period))
       .flatMap(period => {
         const item = period.data.find(
-          candidate =>
-            candidate.product_id === product.product_id ||
-            candidate.name === product.name,
+          candidate => candidate.product_id === product.product_id,
         );
 
         if (!item) return [];
@@ -107,7 +105,6 @@ export function useProductHistory(product: Product, history: DataFile[]) {
   }, [
     history,
     product.product_id,
-    product.name,
     product.current_price,
     product.current_unit_price,
     product.status,

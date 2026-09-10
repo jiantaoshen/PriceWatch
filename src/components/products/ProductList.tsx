@@ -10,7 +10,7 @@
  *     product cards, empty states, creation action and pagination.
  *
  * Inputs:
- *   Latest merged DataFile, history index, product selection callback and refresh callback.
+ *   Latest merged LatestDataFile, history index, product selection callback and refresh callback.
  *
  * Outputs:
  *   Interactive dashboard UI. Product creation is delegated to ProductFormDialog.
@@ -36,11 +36,11 @@ import { Separator } from "@/components/ui/separator";
 
 import { useProductList } from "@/hooks/useProductList";
 
-import type { DataFile, HistoryIndex, Product } from "@/types/product";
+import type { HistoryIndex, LatestDataFile, Product } from "@/types/product";
 
 
 interface ProductListProps {
-  data: DataFile;
+  data: LatestDataFile;
   history: HistoryIndex | null;
   onSelectProduct: (product: Product) => void;
   onRefresh: () => void | Promise<void>;

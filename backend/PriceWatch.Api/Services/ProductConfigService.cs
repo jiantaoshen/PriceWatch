@@ -17,8 +17,8 @@
 //   - DeleteAsync(id): removes a product.
 //
 // Inputs:
-//   ProductConfigInput for scraper configuration, lifecycle DTOs, and
-//   SetManualSourcePriceInput for a user-entered source price.
+//   Current-format python/products.json, ProductConfigInput for scraper configuration,
+//   lifecycle DTOs, and SetManualSourcePriceInput for a user-entered source price.
 //
 // Outputs:
 //   ProductConfig objects and an atomically rewritten python/products.json file.
@@ -42,7 +42,6 @@ public sealed class ProductConfigService
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
         Converters =
         {
             new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
