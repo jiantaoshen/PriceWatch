@@ -2,16 +2,16 @@
  * File: components/products/ProductCard.tsx
  * Purpose:
  *   Renders one dashboard product card with total/unit price winners, target
- *   status, scraper health, and the user's lifecycle state.
+ *   status, scraper health, archive state and latest purchase reference.
  *
  * Main functions:
- *   - ProductCard({ product, onClick }): clickable dashboard card.
+ *   - ProductCard({ product, historyComparison, onClick }): clickable dashboard card.
  *   - PriceBlock(...): reusable total/unit price section.
  *   - TotalTargetBadge(...): total-price target state.
  *   - UnitTargetBadge(...): unit-price target state.
  *
  * Inputs:
- *   Merged Product object from useAppData and an onClick callback.
+ *   Merged Product object, newest older history comparison, and an onClick callback.
  *
  * Outputs:
  *   A Card button that opens product details.
@@ -19,24 +19,31 @@
 
 import { Check, Minus, Store } from "lucide-react";
 
-import { ProductLifecycleBadge } from "@/components/products/ProductLifecycleBadge";
-import { ProductLifecycleCardInfo } from "@/components/products/ProductLifecycleCardInfo";
+import { ProductArchiveBadge } from "@/components/products/ProductArchiveBadge";
+import { ProductPurchaseInfo } from "@/components/products/ProductPurchaseInfo";
+import { ProductPriceMovement } from "@/components/products/ProductPriceMovement";
 import { ProductStatusBadge } from "@/components/products/ProductStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { formatPrice } from "@/utils/price";
 
+import type { RecentHistoryComparison } from "@/utils/historyComparison";
 import type { Product } from "@/types/product";
 
 
 interface ProductCardProps {
   product: Product;
+  historyComparison: RecentHistoryComparison;
   onClick: () => void;
 }
 
 
-export function ProductCard({ product, onClick }: ProductCardProps) {
+export function ProductCard({
+  product,
+  historyComparison,
+  onClick,
+}: ProductCardProps) {
   const currentPrice = product.current_price;
   const currentUnitPrice = product.current_unit_price ?? null;
   const totalStore = product.store ?? null;
@@ -44,6 +51,7 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
   const unit = product.unit ?? null;
   const offers = product.offers ?? [];
   const unitTarget = product.target_unit_price ?? null;
+  const isArchived = product.archived_at !== null;
   const isNotRun = product.status === "not_run";
   const needsReview = product.status === "suspicious" || product.status === "failed";
 
@@ -66,18 +74,20 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
                 <Store className="size-3.5" />
 
                 <span>
-                  {isNotRun
-                    ? "Waiting for first run"
-                    : product.status === "failed"
-                      ? "Latest price check needs attention"
-                      : `${offers.length} ${offers.length === 1 ? "store" : "stores"}`}
+                  {isArchived
+                    ? "Archived from tracking"
+                    : isNotRun
+                      ? "Waiting for first run"
+                      : product.status === "failed"
+                        ? "Latest price check needs attention"
+                        : `${offers.length} ${offers.length === 1 ? "store" : "stores"}`}
                 </span>
               </div>
             </div>
 
             <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <ProductLifecycleBadge savedType={product.saved_type} />
-              <ProductStatusBadge status={product.status} />
+              <ProductArchiveBadge archivedAt={product.archived_at} />
+              {!isArchived && <ProductStatusBadge status={product.status} />}
             </div>
           </div>
         </CardHeader>
@@ -87,30 +97,40 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
           <PriceBlock
             label="Lowest Total"
             price={currentPrice}
+            previousPrice={historyComparison.price}
+            comparisonPeriod={historyComparison.period}
             currency={product.currency}
             store={totalStore}
             target={product.target_price}
+            showMovement={!isArchived && product.status === "success"}
           />
 
           <PriceBlock
             label="Lowest Unit"
             price={currentUnitPrice}
+            previousPrice={historyComparison.unitPrice}
+            comparisonPeriod={historyComparison.period}
             currency={product.currency}
             unit={unit}
             store={unitStore}
             target={unitTarget}
+            showMovement={!isArchived && product.status === "success"}
             borderLeft
           />
         </CardContent>
 
 
         <div className="min-h-14 border-t px-5 py-3">
-          <ProductLifecycleCardInfo product={product} />
+          <ProductPurchaseInfo product={product} />
         </div>
 
 
         <CardFooter className="min-h-15 gap-2 border-t px-5 py-3">
-          {isNotRun ? (
+          {isArchived ? (
+            <Badge variant="outline" className="gap-1 text-muted-foreground">
+              Archived · scraper skipped
+            </Badge>
+          ) : isNotRun ? (
             <Badge variant="outline" className="gap-1 text-muted-foreground">
               <Minus className="size-3" />
               Waiting for first run
@@ -146,18 +166,24 @@ export function ProductCard({ product, onClick }: ProductCardProps) {
 function PriceBlock({
   label,
   price,
+  previousPrice,
+  comparisonPeriod,
   currency,
   unit,
   store,
   target,
+  showMovement,
   borderLeft = false,
 }: {
   label: string;
   price: number | null;
+  previousPrice: number | null;
+  comparisonPeriod: string | null;
   currency: string;
   unit?: string | null;
   store: string | null;
   target: number | null;
+  showMovement: boolean;
   borderLeft?: boolean;
 }) {
   return (
@@ -184,6 +210,23 @@ function PriceBlock({
           <p className="truncate text-xs font-medium">{store}</p>
         ) : (
           <p className="text-xs text-muted-foreground">—</p>
+        )}
+      </div>
+
+      <div className="mt-2 min-h-5">
+        {showMovement ? (
+          <ProductPriceMovement
+            current={price}
+            previous={previousPrice}
+            currency={currency}
+            unit={unit}
+            compact
+            comparisonLabel={comparisonPeriod}
+          />
+        ) : (
+          <span className="text-[11px] text-muted-foreground/60">
+            Movement unavailable
+          </span>
         )}
       </div>
 

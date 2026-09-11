@@ -1,4 +1,21 @@
-import { Activity, Bot } from "lucide-react";
+/**
+ * File: components/layout/AppHeader.tsx
+ * Purpose:
+ *   Renders top-level navigation. Products and Subscriptions are separate tabs;
+ *   scraper controls continue to belong to the product-tracking side.
+ *
+ * Main functions:
+ *   - AppHeader(props): renders navigation, last update and scraper health action.
+ *   - NavButton(...): shared navigation button.
+ *
+ * Inputs:
+ *   Current AppView, latest scraper metadata and navigation/refresh callbacks.
+ *
+ * Outputs:
+ *   Header UI and onNavigate/onRefresh actions.
+ */
+
+import { Activity, Bot, CreditCard } from "lucide-react";
 
 import { RunNowButton } from "@/components/RunNowButton";
 import { Button } from "@/components/ui/button";
@@ -9,6 +26,7 @@ import type { ReactNode } from "react";
 import type { AppView } from "@/types/app";
 import type { RunMetadata } from "@/types/run";
 
+
 interface AppHeaderProps {
   view: AppView;
   generatedAt: string;
@@ -16,6 +34,7 @@ interface AppHeaderProps {
   onNavigate: (view: AppView) => void;
   onRefresh: () => void | Promise<void>;
 }
+
 
 export function AppHeader({
   view,
@@ -39,12 +58,20 @@ export function AppHeader({
 
         <div className="hidden h-5 w-px bg-border sm:block" />
 
-        <nav className="flex gap-1">
+        <nav className="flex flex-wrap gap-1">
           <NavButton
             active={view === "dashboard"}
             onClick={() => onNavigate("dashboard")}
           >
-            Dashboard
+            Products
+          </NavButton>
+
+          <NavButton
+            active={view === "subscriptions"}
+            onClick={() => onNavigate("subscriptions")}
+          >
+            <CreditCard />
+            Subscriptions
           </NavButton>
 
           <NavButton
@@ -84,11 +111,7 @@ export function AppHeader({
             onClick={() => onNavigate("scraper")}
           >
             <span className={`size-2 rounded-full ${healthDot(health.state)}`} />
-
-            <span className="hidden lg:inline">
-              {health.label}
-            </span>
-
+            <span className="hidden lg:inline">{health.label}</span>
             <Activity className="lg:hidden" />
           </Button>
         </div>
@@ -96,6 +119,7 @@ export function AppHeader({
     </header>
   );
 }
+
 
 function NavButton({
   active,
@@ -118,20 +142,17 @@ function NavButton({
   );
 }
 
+
 function healthDot(state: ReturnType<typeof getRunHealth>["state"]) {
   switch (state) {
-    case "healthy":
-      return "bg-success";
-    case "warning":
-      return "bg-warning";
-    case "stale":
-      return "bg-stale";
-    case "failed":
-      return "bg-destructive";
-    default:
-      return "bg-muted-foreground";
+    case "healthy": return "bg-success";
+    case "warning": return "bg-warning";
+    case "stale": return "bg-stale";
+    case "failed": return "bg-destructive";
+    default: return "bg-muted-foreground";
   }
 }
+
 
 function formatUpdated(value: string) {
   if (!value) return "Never";

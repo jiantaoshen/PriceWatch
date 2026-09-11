@@ -1,24 +1,25 @@
 /**
  * File: components/products/MarkAsPurchasedDialog.tsx
  * Purpose:
- *   Provides the smallest possible UI for marking a tracked product as Owned.
- *   Purchase price defaults to the current scraper price and purchase date defaults
- *   to the user's local date, so most users can confirm without typing anything.
+ *   Records the user's latest purchase reference without creating an "Owned"
+ *   state or purchase-history UI. An active product can optionally be archived
+ *   immediately after purchase so the scraper stops checking it.
  *
  * Main functions:
- *   - MarkAsPurchasedDialog(props): lifecycle dialog component.
- *   - handleSubmit(): validates optional price and calls markProductOwned().
- *   - localToday(): returns YYYY-MM-DD using local calendar values.
+ *   - MarkAsPurchasedDialog(props): renders the purchase action/dialog.
+ *   - handleSubmit(): validates price/date and calls recordProductPurchase().
+ *   - localToday(): returns the user's local YYYY-MM-DD date.
  *
  * Inputs:
- *   Product ID/name/default raw offer price/currency and existing purchase values.
+ *   Product ID/name/currency, default raw winning offer price, existing last
+ *   purchase values, archive state and optional onSaved callback.
  *
  * Outputs:
- *   Updated ProductConfig through onSaved after POST .../mark-owned succeeds.
+ *   Updated ProductConfig after POST /api/product-config/{id}/purchase.
  */
 
 import { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { markProductOwned } from "@/services/productConfigApi";
+import { recordProductPurchase } from "@/services/productConfigApi";
 
 import type { ProductConfig } from "@/services/productConfigApi";
 
@@ -42,9 +43,9 @@ interface MarkAsPurchasedDialogProps {
   productName: string;
   currency: string;
   defaultPrice: number | null;
-  purchasePrice: number | null;
-  purchaseDate: string | null;
-  isOwned?: boolean;
+  lastPurchasePrice: number | null;
+  lastPurchaseDate: string | null;
+  isArchived: boolean;
   onSaved?: (product: ProductConfig) => void | Promise<void>;
 }
 
@@ -54,25 +55,27 @@ export function MarkAsPurchasedDialog({
   productName,
   currency,
   defaultPrice,
-  purchasePrice,
-  purchaseDate,
-  isOwned = false,
+  lastPurchasePrice,
+  lastPurchaseDate,
+  isArchived,
   onSaved,
 }: MarkAsPurchasedDialogProps) {
   const [open, setOpen] = useState(false);
   const [price, setPrice] = useState("");
   const [date, setDate] = useState("");
+  const [archiveAfterPurchase, setArchiveAfterPurchase] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const hasPurchase = lastPurchasePrice !== null || lastPurchaseDate !== null;
 
   function openDialog() {
-    setPrice(numberToInput(purchasePrice ?? defaultPrice));
-    setDate(purchaseDate ?? localToday());
+    setPrice(numberToInput(lastPurchasePrice ?? defaultPrice));
+    setDate(lastPurchaseDate ?? localToday());
+    setArchiveAfterPurchase(false);
     setError(null);
     setOpen(true);
   }
-
 
   async function handleSubmit() {
     if (saving) return;
@@ -87,9 +90,10 @@ export function MarkAsPurchasedDialog({
       setSaving(true);
       setError(null);
 
-      const product = await markProductOwned(productId, {
-        purchase_price: parsedPrice,
-        purchase_date: date || null,
+      const product = await recordProductPurchase(productId, {
+        last_purchase_price: parsedPrice,
+        last_purchase_date: date || null,
+        archive_after_purchase: !isArchived && archiveAfterPurchase,
       });
 
       await onSaved?.(product);
@@ -107,12 +111,11 @@ export function MarkAsPurchasedDialog({
     }
   }
 
-
   return (
     <>
       <Button type="button" variant="outline" onClick={openDialog}>
-        <CheckCircle2 data-icon="inline-start" />
-        {isOwned ? "Edit purchase" : "Mark as purchased"}
+        <ShoppingBag data-icon="inline-start" />
+        {hasPurchase ? "Edit last purchase" : "Bought"}
       </Button>
 
       <Dialog
@@ -125,9 +128,9 @@ export function MarkAsPurchasedDialog({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{isOwned ? "Edit purchase" : "Mark as purchased"}</DialogTitle>
+            <DialogTitle>{hasPurchase ? "Edit last purchase" : "Record purchase"}</DialogTitle>
             <DialogDescription>
-              Save optional purchase details for {productName}. Price tracking can continue normally.
+              Save only your most recent purchase reference for {productName}.
             </DialogDescription>
           </DialogHeader>
 
@@ -154,6 +157,23 @@ export function MarkAsPurchasedDialog({
                 onChange={event => setDate(event.target.value)}
               />
             </div>
+
+            {!isArchived && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4"
+                  checked={archiveAfterPurchase}
+                  onChange={event => setArchiveAfterPurchase(event.target.checked)}
+                />
+                <span>
+                  <span className="block text-sm font-medium">Stop tracking and archive</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                    Keep the product and its history, but exclude it from future scraper runs.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
 
           {error && (
@@ -177,7 +197,7 @@ export function MarkAsPurchasedDialog({
               disabled={saving}
               onClick={() => void handleSubmit()}
             >
-              {saving ? "Saving..." : "Save purchase"}
+              {saving ? "Saving..." : archiveAfterPurchase ? "Save & archive" : "Save purchase"}
             </Button>
           </DialogFooter>
         </DialogContent>

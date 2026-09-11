@@ -1,36 +1,32 @@
 /**
  * File: services/productConfigApi.ts
  * Purpose:
- *   Typed frontend client for product configuration and product lifecycle APIs.
- *   Normal add/edit requests remain scraper-only; ownership/subscription changes
- *   use dedicated action endpoints so lifecycle data cannot be erased by editing.
+ *   Typed frontend client for scraper-oriented product configuration plus the
+ *   lightweight purchase/archive lifecycle. Subscriptions are intentionally
+ *   handled by a separate service and API.
  *
  * Main functions:
- *   - fetchProductConfigs(): load all saved products.
- *   - fetchProductConfig(id): load one saved product for the edit dialog.
- *   - createProductConfig(input): create a tracked product.
+ *   - fetchProductConfigs(): load active + archived products.
+ *   - fetchProductConfig(id): load one product config.
+ *   - createProductConfig(input): create an active tracked product.
  *   - updateProductConfig(id, input): update scraper settings only.
- *   - markProductOwned(id, input): mark a product as purchased.
- *   - markProductSubscription(id, input): mark a product as a subscription.
- *   - markProductTracked(id): clear lifecycle data and return to tracking-only.
- *   - deleteProductConfig(id): delete the saved product.
+ *   - recordProductPurchase(id, input): save the latest purchase reference.
+ *   - archiveProduct(id): move a product to Archived.
+ *   - restoreProduct(id): return an archived product to active tracking.
+ *   - deleteProductConfig(id): permanently delete a product.
  *
  * Inputs:
- *   ProductConfigInput for scraper settings and small lifecycle action payloads.
+ *   ProductConfigInput for scraper settings and RecordProductPurchaseInput for
+ *   purchase/archive actions.
  *
  * Outputs:
- *   Current-schema ProductConfig objects using the API's snake_case field names.
- *   Legacy PascalCase/camelCase/product_id fallbacks are intentionally unsupported.
+ *   Current-schema ProductConfig objects using snake_case API field names.
  */
 
 import { apiJson, jsonRequest } from "@/services/api";
 
 
 const PRODUCTS_URL = "/api/product-config";
-
-
-export type SavedType = "tracked" | "owned" | "subscription";
-export type BillingInterval = "weekly" | "monthly" | "quarterly" | "yearly";
 
 
 export interface ProductSource {
@@ -46,7 +42,6 @@ export interface ProductSource {
 export interface ProductConfig {
   id: string;
   name: string;
-  saved_type: SavedType;
   scraping_enabled: boolean;
   comparison_quantity: number | null;
   sources: ProductSource[];
@@ -55,13 +50,9 @@ export interface ProductConfig {
   unit: string | null;
   currency: string;
 
-  purchase_price: number | null;
-  purchase_date: string | null;
-
-  subscription_price: number | null;
-  billing_interval: BillingInterval | null;
-  next_billing_date: string | null;
-
+  last_purchase_price: number | null;
+  last_purchase_date: string | null;
+  archived_at: string | null;
 }
 
 
@@ -87,16 +78,10 @@ export interface ProductConfigInput {
 }
 
 
-export interface MarkProductOwnedInput {
-  purchase_price: number | null;
-  purchase_date: string | null;
-}
-
-
-export interface MarkSubscriptionInput {
-  subscription_price: number | null;
-  billing_interval: BillingInterval | null;
-  next_billing_date: string | null;
+export interface RecordProductPurchaseInput {
+  last_purchase_price: number | null;
+  last_purchase_date: string | null;
+  archive_after_purchase: boolean;
 }
 
 
@@ -114,24 +99,20 @@ export async function fetchProductConfigs(): Promise<ProductConfig[]> {
 
 
 export async function fetchProductConfig(id: string): Promise<ProductConfig> {
-  const product = await apiJson<ProductConfig>(
+  return await apiJson<ProductConfig>(
     `${PRODUCTS_URL}/${encodeURIComponent(id)}`,
     { cache: "no-store" },
   );
-
-  return product;
 }
 
 
 export async function createProductConfig(
   input: ProductConfigInput,
 ): Promise<ProductConfig> {
-  const product = await apiJson<ProductConfig>(
+  return await apiJson<ProductConfig>(
     PRODUCTS_URL,
     jsonRequest("POST", input),
   );
-
-  return product;
 }
 
 
@@ -139,48 +120,37 @@ export async function updateProductConfig(
   id: string,
   input: ProductConfigInput,
 ): Promise<ProductConfig> {
-  const product = await apiJson<ProductConfig>(
+  return await apiJson<ProductConfig>(
     `${PRODUCTS_URL}/${encodeURIComponent(id)}`,
     jsonRequest("PUT", input),
   );
-
-  return product;
 }
 
 
-export async function markProductOwned(
+export async function recordProductPurchase(
   id: string,
-  input: MarkProductOwnedInput,
+  input: RecordProductPurchaseInput,
 ): Promise<ProductConfig> {
-  const product = await apiJson<ProductConfig>(
-    `${PRODUCTS_URL}/${encodeURIComponent(id)}/mark-owned`,
+  return await apiJson<ProductConfig>(
+    `${PRODUCTS_URL}/${encodeURIComponent(id)}/purchase`,
     jsonRequest("POST", input),
   );
-
-  return product;
 }
 
 
-export async function markProductSubscription(
-  id: string,
-  input: MarkSubscriptionInput,
-): Promise<ProductConfig> {
-  const product = await apiJson<ProductConfig>(
-    `${PRODUCTS_URL}/${encodeURIComponent(id)}/mark-subscription`,
-    jsonRequest("POST", input),
-  );
-
-  return product;
-}
-
-
-export async function markProductTracked(id: string): Promise<ProductConfig> {
-  const product = await apiJson<ProductConfig>(
-    `${PRODUCTS_URL}/${encodeURIComponent(id)}/mark-tracked`,
+export async function archiveProduct(id: string): Promise<ProductConfig> {
+  return await apiJson<ProductConfig>(
+    `${PRODUCTS_URL}/${encodeURIComponent(id)}/archive`,
     jsonRequest("POST", {}),
   );
+}
 
-  return product;
+
+export async function restoreProduct(id: string): Promise<ProductConfig> {
+  return await apiJson<ProductConfig>(
+    `${PRODUCTS_URL}/${encodeURIComponent(id)}/restore`,
+    jsonRequest("POST", {}),
+  );
 }
 
 

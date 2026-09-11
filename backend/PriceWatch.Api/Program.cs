@@ -2,17 +2,18 @@
 // File: Program.cs
 // Purpose:
 //   Configures the PriceWatch ASP.NET API and maps all HTTP endpoints, including
-//   product lifecycle and price-review actions. Suspicious-price confirmation is
-//   handled here without changing the existing external AI chat contract.
+//   product purchase/archive, independent subscription, and price-review actions.
+//   Product subscriptions are a separate domain and never enter scraper config.
 //
 // Main product functions/endpoints:
 //   - GET    /api/product-config            -> list saved product configs.
 //   - GET    /api/product-config/{id}       -> fetch one config for editing.
 //   - POST   /api/product-config            -> create a tracked product.
 //   - PUT    /api/product-config/{id}       -> update scraper settings only.
-//   - POST   /{id}/mark-owned               -> save purchase lifecycle data.
-//   - POST   /{id}/mark-subscription        -> save subscription lifecycle data.
-//   - POST   /{id}/mark-tracked             -> clear lifecycle data, keep tracking.
+//   - POST   /{id}/purchase                 -> record last purchase, optionally archive.
+//   - POST   /{id}/archive                  -> archive and stop scraper processing.
+//   - POST   /{id}/restore                  -> restore product to active tracking.
+//   - GET/POST/PUT/DELETE /api/subscriptions -> independent recurring expenses.
 //   - POST   /{id}/price-review/accept       -> accept a suspicious scraped price.
 //   - POST   /{id}/price-review/manual       -> save a trusted manual source price.
 //   - DELETE /api/product-config/{id}       -> delete product configuration.
@@ -21,8 +22,8 @@
 //   HTTP requests from the React frontend and existing scraper/AI operations.
 //
 // Outputs:
-//   JSON/file/stream HTTP responses. Enums are serialized as camel-case strings
-//   such as "tracked", "owned", "subscription", and "monthly".
+//   JSON/file/stream HTTP responses. Subscription billing enums are serialized
+//   as camel-case strings such as "monthly" and "yearly".
 // ============================================================================
 
 using System.Text.Json;
@@ -60,6 +61,7 @@ builder.Services.AddSingleton<AppPaths>();
 builder.Services.AddSingleton<ScraperRunner>();
 builder.Services.AddSingleton<ScheduleService>();
 builder.Services.AddSingleton<ProductConfigService>();
+builder.Services.AddSingleton<SubscriptionService>();
 builder.Services.AddSingleton<PriceReviewService>();
 builder.Services.AddSingleton<EmailSettingsService>();
 builder.Services.AddSingleton<AiProductContextService>();
@@ -340,7 +342,7 @@ app.MapDelete("/api/schedule", async (ScheduleService service) =>
 
 
 // ============================================================
-// Product configuration + lifecycle
+// Product configuration + purchase/archive lifecycle
 // ============================================================
 
 app.MapGet("/api/product-config", async (ProductConfigService service) =>
@@ -378,7 +380,6 @@ app.MapPost(
         try
         {
             var created = await service.CreateAsync(input);
-
             return Results.Created(
                 $"/api/product-config/{created.Id}",
                 created
@@ -418,16 +419,16 @@ app.MapPut(
 
 
 app.MapPost(
-    "/api/product-config/{id}/mark-owned",
+    "/api/product-config/{id}/purchase",
     async (
         string id,
-        MarkProductOwnedInput input,
+        RecordProductPurchaseInput input,
         ProductConfigService service
     ) =>
     {
         try
         {
-            var updated = await service.MarkOwnedAsync(id, input);
+            var updated = await service.RecordPurchaseAsync(id, input);
             return Results.Ok(updated);
         }
         catch (KeyNotFoundException exception)
@@ -443,38 +444,186 @@ app.MapPost(
 
 
 app.MapPost(
-    "/api/product-config/{id}/mark-subscription",
-    async (
-        string id,
-        MarkSubscriptionInput input,
-        ProductConfigService service
-    ) =>
-    {
-        try
-        {
-            var updated = await service.MarkSubscriptionAsync(id, input);
-            return Results.Ok(updated);
-        }
-        catch (KeyNotFoundException exception)
-        {
-            return Results.NotFound(new { error = exception.Message });
-        }
-        catch (ArgumentException exception)
-        {
-            return Results.BadRequest(new { error = exception.Message });
-        }
-    }
-);
-
-
-app.MapPost(
-    "/api/product-config/{id}/mark-tracked",
+    "/api/product-config/{id}/archive",
     async (string id, ProductConfigService service) =>
     {
         try
         {
-            var updated = await service.MarkTrackedAsync(id);
+            var updated = await service.ArchiveAsync(id);
             return Results.Ok(updated);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/product-config/{id}/restore",
+    async (string id, ProductConfigService service) =>
+    {
+        try
+        {
+            var updated = await service.RestoreAsync(id);
+            return Results.Ok(updated);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapDelete(
+    "/api/product-config/{id}",
+    async (string id, ProductConfigService service) =>
+    {
+        try
+        {
+            await service.DeleteAsync(id);
+            return Results.NoContent();
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+// ============================================================
+// Independent subscriptions
+// ============================================================
+
+app.MapGet("/api/subscriptions", async (SubscriptionService service) =>
+{
+    var subscriptions = await service.GetAllAsync();
+    return Results.Ok(subscriptions);
+});
+
+
+app.MapGet(
+    "/api/subscriptions/{id}",
+    async (string id, SubscriptionService service) =>
+    {
+        try
+        {
+            var subscription = await service.GetByIdAsync(id);
+            return Results.Ok(subscription);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/subscriptions",
+    async (SubscriptionInput input, SubscriptionService service) =>
+    {
+        try
+        {
+            var created = await service.CreateAsync(input);
+            return Results.Created($"/api/subscriptions/{created.Id}", created);
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPut(
+    "/api/subscriptions/{id}",
+    async (string id, SubscriptionInput input, SubscriptionService service) =>
+    {
+        try
+        {
+            var updated = await service.UpdateAsync(id, input);
+            return Results.Ok(updated);
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/subscriptions/{id}/activate",
+    async (string id, SubscriptionService service) =>
+    {
+        try
+        {
+            return Results.Ok(await service.SetActiveAsync(id, true));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapPost(
+    "/api/subscriptions/{id}/cancel",
+    async (string id, SubscriptionService service) =>
+    {
+        try
+        {
+            return Results.Ok(await service.SetActiveAsync(id, false));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return Results.NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new { error = exception.Message });
+        }
+    }
+);
+
+
+app.MapDelete(
+    "/api/subscriptions/{id}",
+    async (string id, SubscriptionService service) =>
+    {
+        try
+        {
+            await service.DeleteAsync(id);
+            return Results.NoContent();
         }
         catch (KeyNotFoundException exception)
         {
@@ -558,23 +707,6 @@ app.MapPost(
         catch (ArgumentException exception)
         {
             return Results.BadRequest(new { error = exception.Message });
-        }
-    }
-);
-
-
-app.MapDelete(
-    "/api/product-config/{id}",
-    async (string id, ProductConfigService service) =>
-    {
-        try
-        {
-            await service.DeleteAsync(id);
-            return Results.NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return Results.NotFound(new { error = "Product not found" });
         }
     }
 );

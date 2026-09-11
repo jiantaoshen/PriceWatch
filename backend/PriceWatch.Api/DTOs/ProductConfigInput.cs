@@ -2,9 +2,9 @@
 // File: DTOs/ProductConfigInput.cs
 // Purpose:
 //   Defines the create/edit input for scraper configuration only.
-//   Lifecycle fields such as purchase/subscription data intentionally do NOT
-//   live here, so editing a target price or source cannot accidentally erase
-//   ownership/subscription information.
+//   Purchase/archive fields intentionally do NOT live here, so editing a target
+//   price or source cannot accidentally erase the user's last-purchase/archive
+//   context. Subscriptions are a separate API/domain entirely.
 //
 // Main types:
 //   - ProductSourceInput: one source entered by the user.

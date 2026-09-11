@@ -1,21 +1,20 @@
 /**
  * File: components/products/ProductCollectionTabs.tsx
  * Purpose:
- *   Provides the main lifecycle navigation for the PriceWatch product library.
- *   Users can switch between all saved products, tracking-only products, owned
- *   products and subscriptions without leaving the price-tracking dashboard.
+ *   Switches the product dashboard between active PriceWatch items and archived
+ *   products. Subscriptions are intentionally not part of this product collection.
  *
  * Main function:
- *   - ProductCollectionTabs(props): renders four lifecycle scope buttons with counts.
+ *   - ProductCollectionTabs(props): renders Active / Archived tabs with counts.
  *
  * Inputs:
- *   Current ProductCollection value, all merged Product records, and a change callback.
+ *   Current ProductCollection, all merged Product records and onChange callback.
  *
  * Outputs:
- *   Calls onChange(nextCollection) when the user selects a lifecycle scope.
+ *   Calls onChange(nextCollection) when the user selects a product scope.
  */
 
-import { Eye, Layers3, PackageCheck, Repeat2 } from "lucide-react";
+import { Archive, Radar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -35,23 +34,12 @@ export function ProductCollectionTabs({
   products,
   onChange,
 }: ProductCollectionTabsProps) {
-  const counts = {
-    all: products.length,
-    tracked: products.filter(product => product.saved_type === "tracked").length,
-    owned: products.filter(product => product.saved_type === "owned").length,
-    subscription: products.filter(product => product.saved_type === "subscription").length,
-  };
+  const activeCount = products.filter(product => product.archived_at === null).length;
+  const archivedCount = products.length - activeCount;
 
-  const items: {
-    value: ProductCollection;
-    label: string;
-    count: number;
-    icon: typeof Layers3;
-  }[] = [
-    { value: "all", label: "All", count: counts.all, icon: Layers3 },
-    { value: "tracked", label: "Tracking", count: counts.tracked, icon: Eye },
-    { value: "owned", label: "Owned", count: counts.owned, icon: PackageCheck },
-    { value: "subscription", label: "Subscriptions", count: counts.subscription, icon: Repeat2 },
+  const items = [
+    { value: "active" as const, label: "Active", count: activeCount, icon: Radar },
+    { value: "archived" as const, label: "Archived", count: archivedCount, icon: Archive },
   ];
 
   return (

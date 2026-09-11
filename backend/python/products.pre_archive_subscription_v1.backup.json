@@ -2,6 +2,7 @@
   {
     "id": "0d3919eb71a64921",
     "name": "Inet System G50 R5/5070 Ti",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -18,13 +19,16 @@
     "target_unit_price": null,
     "unit": null,
     "currency": "SEK",
-    "last_purchase_price": 24999,
-    "last_purchase_date": "2026-09-11",
-    "archived_at": null
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "2eb30e77766b4bfb",
-    "name": "ACO Spotless Skin Clarifying Face \u0026 Body Cleanser 200 ml",
+    "name": "ACO Spotless Skin Clarifying Face & Body Cleanser 200 ml",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -41,13 +45,16 @@
     "target_unit_price": null,
     "unit": null,
     "currency": "SEK",
-    "last_purchase_price": null,
-    "last_purchase_date": null,
-    "archived_at": null
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "11c1e288557248cd",
     "name": "Flux Original Coolmint XL 1000 ml",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -64,13 +71,16 @@
     "target_unit_price": null,
     "unit": null,
     "currency": "SEK",
-    "last_purchase_price": null,
-    "last_purchase_date": null,
-    "archived_at": null
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "d4fd48e394c64a3d",
     "name": "Webhallen-Config-Core-R5-7500F-RTX-5060Ti-16GB-16GB-1TB-Win-11",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
@@ -87,13 +97,16 @@
     "target_unit_price": null,
     "unit": null,
     "currency": "SEK",
-    "last_purchase_price": null,
-    "last_purchase_date": null,
-    "archived_at": null
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "560b87eee8a441d7",
-    "name": "Finish Diskmaskinreng\u00F6ring Lemon 250 ml",
+    "name": "Finish Diskmaskinrengöring Lemon 250 ml",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": 2,
     "sources": [
@@ -107,7 +120,7 @@
       },
       {
         "store": "Amazon",
-        "url": "https://www.amazon.se/Finish-382399-Diskmaskinsreng%C3%B6ring-Citron-250ml/dp/B08KYXNCSY?crid=TKIYM772F4KQ\u0026dib=eyJ2IjoiMSJ9.3oEHXZ9lTgsP8_fNroi8yAPQt2yQSuFca1h7Ux9gRpqaz6uaoMxTA_gFTAgZVWUJGIrD4SHfNKA67yepqNj102rbXgQtme1pu-Z37SoOurpTXzc3ECsDCVjjY37bPoVPtafIsxnHPsK2jIxLttJVoQ5pdlme5nycEDbn7Olez2I7d118CKGIB1XEyGLHUswracUQXP1K-WESfrvObtIlm-xquzc77YoiLIzCnR2PyYOIPZlnvtvJaHPbaPtAbVaYOHuLOQTrL2qk1IbLvk6Ln9QtXCHqf_3WJiY5dGnrrdc.oJKTN5uHPhGmaMildeC_3OS5s6JQANj0gg96YJxInX0\u0026dib_tag=se\u0026keywords=Finish\u002BDiskmaskinreng%C3%B6ring\u002BLemon\u002B250\u002Bml\u0026qid=1788623077\u0026sprefix=finish\u002Bdiskmaskinreng%C3%B6ring\u002Blemon\u002B250\u002Bml%2Caps%2C114\u0026sr=8-1",
+        "url": "https://www.amazon.se/Finish-382399-Diskmaskinsreng%C3%B6ring-Citron-250ml/dp/B08KYXNCSY?crid=TKIYM772F4KQ&dib=eyJ2IjoiMSJ9.3oEHXZ9lTgsP8_fNroi8yAPQt2yQSuFca1h7Ux9gRpqaz6uaoMxTA_gFTAgZVWUJGIrD4SHfNKA67yepqNj102rbXgQtme1pu-Z37SoOurpTXzc3ECsDCVjjY37bPoVPtafIsxnHPsK2jIxLttJVoQ5pdlme5nycEDbn7Olez2I7d118CKGIB1XEyGLHUswracUQXP1K-WESfrvObtIlm-xquzc77YoiLIzCnR2PyYOIPZlnvtvJaHPbaPtAbVaYOHuLOQTrL2qk1IbLvk6Ln9QtXCHqf_3WJiY5dGnrrdc.oJKTN5uHPhGmaMildeC_3OS5s6JQANj0gg96YJxInX0&dib_tag=se&keywords=Finish+Diskmaskinreng%C3%B6ring+Lemon+250+ml&qid=1788623077&sprefix=finish+diskmaskinreng%C3%B6ring+lemon+250+ml%2Caps%2C114&sr=8-1",
         "scraping_enabled": false,
         "manual_price": 26.95,
         "unit_quantity": 1,
@@ -118,19 +131,22 @@
     "target_unit_price": 26.95,
     "unit": "pcs",
     "currency": "SEK",
-    "last_purchase_price": null,
-    "last_purchase_date": null,
-    "archived_at": null
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   },
   {
     "id": "ae189920285f4431",
     "name": "Fiberkudde 50x60 Hoie DOWNLIKE ECO",
+    "saved_type": "tracked",
     "scraping_enabled": true,
     "comparison_quantity": null,
     "sources": [
       {
         "store": "JYSK",
-        "url": "https://jysk.se/sovrum/kuddar/fiberkuddar/fiberkudde-50x60-hoie-downlike-eco?search_category=auto_suggestion\u0026query=hoie#fromSearch",
+        "url": "https://jysk.se/sovrum/kuddar/fiberkuddar/fiberkudde-50x60-hoie-downlike-eco?search_category=auto_suggestion&query=hoie#fromSearch",
         "scraping_enabled": true,
         "manual_price": null,
         "unit_quantity": null,
@@ -141,8 +157,10 @@
     "target_unit_price": null,
     "unit": null,
     "currency": "SEK",
-    "last_purchase_price": null,
-    "last_purchase_date": null,
-    "archived_at": null
+    "purchase_price": null,
+    "purchase_date": null,
+    "subscription_price": null,
+    "billing_interval": null,
+    "next_billing_date": null
   }
 ]

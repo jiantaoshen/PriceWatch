@@ -14,6 +14,7 @@ Main functions:
 
 Inputs:
     Current-format python/products.json, scraped/manual source prices, and accepted history.
+    Archived products have archived_at set and are excluded from scraper runs.
     Product IDs, sources, currency and scraping flags are required by the current schema.
 
 Outputs:
@@ -104,6 +105,11 @@ def product_uses_scraper(product) -> bool:
         should_scrape_source(product, source)
         for source in get_product_sources(product)
     )
+
+
+def is_active_product(product) -> bool:
+    """Return True only for current-schema products that are not archived."""
+    return product["archived_at"] is None
 
 
 def unit_suffix(unit):
@@ -854,7 +860,15 @@ async def main():
         return
 
     with PRODUCTS_FILE.open("r", encoding="utf-8-sig") as file:
-        products = json.load(file)
+        all_products = json.load(file)
+
+    # Archived products remain in products.json for the UI and purchase reference,
+    # but they are intentionally outside the scraper execution set.
+    products = [
+        product
+        for product in all_products
+        if is_active_product(product)
+    ]
 
     notification_state = load_notification_state(NOTIFICATION_STATE_FILE)
     notification_events = []

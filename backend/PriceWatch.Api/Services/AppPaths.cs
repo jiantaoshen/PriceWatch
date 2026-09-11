@@ -1,3 +1,21 @@
+// ============================================================================
+// File: Services/AppPaths.cs
+// Purpose:
+//   Resolves the PriceWatch project root and centralizes all filesystem paths
+//   used by the ASP.NET API, including the independent subscriptions store.
+//
+// Main functions:
+//   - AppPaths(environment): resolves directories/files and creates data folders.
+//   - ResolveRootDirectory(...): finds the project root in development/publish.
+//
+// Inputs:
+//   IWebHostEnvironment and the deployed/development directory structure.
+//
+// Outputs:
+//   Absolute paths for python/products.json, data/latest.json, history, runs,
+//   settings, data/subscriptions.json and the project .env file.
+// ============================================================================
+
 public sealed class AppPaths
 {
     public string RootDirectory { get; }
@@ -9,6 +27,7 @@ public sealed class AppPaths
 
     public string LatestFile { get; }
     public string ProductsFile { get; }
+    public string SubscriptionsFile { get; }
     public string EnvFile { get; }
 
 
@@ -24,6 +43,7 @@ public sealed class AppPaths
 
         LatestFile = Path.Combine(DataDirectory, "latest.json");
         ProductsFile = Path.Combine(PythonDirectory, "products.json");
+        SubscriptionsFile = Path.Combine(DataDirectory, "subscriptions.json");
         EnvFile = Path.Combine(RootDirectory, ".env");
 
         EnsureDirectories();
@@ -34,10 +54,6 @@ public sealed class AppPaths
     }
 
 
-    // ============================================================
-    // Directories
-    // ============================================================
-
     private void EnsureDirectories()
     {
         Directory.CreateDirectory(DataDirectory);
@@ -47,45 +63,23 @@ public sealed class AppPaths
     }
 
 
-    // ============================================================
-    // Root
-    // ============================================================
-
-    private static string ResolveRootDirectory(
-        IWebHostEnvironment environment
-    )
+    private static string ResolveRootDirectory(IWebHostEnvironment environment)
     {
-        var executableDirectory = Path.GetFullPath(
-            AppContext.BaseDirectory
-        );
+        var executableDirectory = Path.GetFullPath(AppContext.BaseDirectory);
 
-        // Published app:
-        //
-        // publish/
-        // ├─ PriceWatch.Api.exe
-        // ├─ python/
-        // └─ data/
         if (HasPythonDirectory(executableDirectory))
         {
             return executableDirectory;
         }
 
-        // Development:
-        // walk upwards from bin/... until project root is found.
         var root = FindProjectRoot(executableDirectory);
-
         if (root is not null)
         {
             return root;
         }
 
-        // Fallback to ASP.NET content root.
-        var contentRoot = Path.GetFullPath(
-            environment.ContentRootPath
-        );
-
+        var contentRoot = Path.GetFullPath(environment.ContentRootPath);
         root = FindProjectRoot(contentRoot);
-
         if (root is not null)
         {
             return root;
@@ -119,8 +113,6 @@ public sealed class AppPaths
 
     private static bool HasPythonDirectory(string directory)
     {
-        return Directory.Exists(
-            Path.Combine(directory, "python")
-        );
+        return Directory.Exists(Path.Combine(directory, "python"));
     }
 }

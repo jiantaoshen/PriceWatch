@@ -1,30 +1,42 @@
 /**
  * File: components/products/ProductSummary.tsx
  * Purpose:
- *   Gives a price-focused overview of the complete saved-product library.
- *   Lifecycle counts live in ProductCollectionTabs, while these cards continue
- *   showing the PriceWatch signals that matter across every saved product.
+ *   Shows price-focused metrics for ACTIVE products only. Archived products are
+ *   kept as a separate library and do not affect current target/review/movement counts.
  *
- * Main function:
- *   - ProductSummary({ products }): computes and renders dashboard price metrics.
+ * Main functions:
+ *   - ProductSummary({ products, history, currentPeriod }): computes active metrics.
+ *   - SummaryCard(props): renders one read-only dashboard metric card.
  *
  * Inputs:
- *   All merged Product records.
+ *   All merged products, compact history snapshots and current latest period.
  *
  * Outputs:
- *   Five read-only summary cards including a Needs Review count.
+ *   Active, Archived, Total Target, Needs Review, Price Drops and Price Increases.
  */
 
-import { AlertTriangle, Package, Target, TrendingDown, Weight } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  Radar,
+  Target,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 
+import { getRecentHistoryComparison } from "@/utils/historyComparison";
+import { getPriceMovement } from "@/utils/priceMovement";
+
 import type { LucideIcon } from "lucide-react";
-import type { Product } from "@/types/product";
+import type { HistoryDataFile, Product } from "@/types/product";
 
 
 interface ProductSummaryProps {
   products: Product[];
+  history: HistoryDataFile[];
+  currentPeriod: string;
 }
 
 interface SummaryItem {
@@ -35,29 +47,47 @@ interface SummaryItem {
 }
 
 
-export function ProductSummary({ products }: ProductSummaryProps) {
+export function ProductSummary({
+  products,
+  history,
+  currentPeriod,
+}: ProductSummaryProps) {
+  const activeProducts = products.filter(product => product.archived_at === null);
+  const archivedCount = products.length - activeProducts.length;
+  const successfulProducts = activeProducts.filter(product => product.status === "success");
+
+  const movementDirections = successfulProducts.map(product => {
+    const comparison = getRecentHistoryComparison(
+      product.product_id,
+      history,
+      currentPeriod,
+    );
+
+    return getPriceMovement(product.current_price, comparison.price).direction;
+  });
+
   const items: SummaryItem[] = [
     {
-      title: "Saved",
-      value: products.length,
-      subtitle: "Across all lifecycle states",
-      icon: Package,
+      title: "Active",
+      value: activeProducts.length,
+      subtitle: "Currently tracked",
+      icon: Radar,
+    },
+    {
+      title: "Archived",
+      value: archivedCount,
+      subtitle: "No longer scraped",
+      icon: Archive,
     },
     {
       title: "Total Target",
-      value: products.filter(product => product.below_target === true).length,
+      value: activeProducts.filter(product => product.below_target === true).length,
       subtitle: "Below target",
       icon: Target,
     },
     {
-      title: "Unit Target",
-      value: products.filter(product => product.unit_below_target === true).length,
-      subtitle: "Below unit target",
-      icon: Weight,
-    },
-    {
       title: "Needs Review",
-      value: products.filter(product =>
+      value: activeProducts.filter(product =>
         product.status === "suspicious" || product.status === "failed"
       ).length,
       subtitle: "Suspicious or unavailable",
@@ -65,24 +95,20 @@ export function ProductSummary({ products }: ProductSummaryProps) {
     },
     {
       title: "Price Drops",
-      value: products.filter(product => {
-        const current = product.current_price;
-        const previous = product.previous_price;
-
-        return (
-          product.status === "success" &&
-          current !== null &&
-          previous !== null &&
-          current < previous
-        );
-      }).length,
-      subtitle: "Since last check",
+      value: movementDirections.filter(direction => direction === "down").length,
+      subtitle: "Vs recent history",
       icon: TrendingDown,
+    },
+    {
+      title: "Price Increases",
+      value: movementDirections.filter(direction => direction === "up").length,
+      subtitle: "Vs recent history",
+      icon: TrendingUp,
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       {items.map(item => (
         <SummaryCard key={item.title} {...item} />
       ))}

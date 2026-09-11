@@ -1,23 +1,24 @@
 /**
  * File: components/products/ProductDetailHeader.tsx
  * Purpose:
- *   Renders the product detail page header, scraper status, lifecycle badge,
- *   winner store information, current price and all product actions.
+ *   Renders the product detail header with scraper status, archive state, latest
+ *   purchase reference, current price and product actions.
  *
  * Main function:
- *   - ProductDetailHeader(props): detail header UI.
+ *   - ProductDetailHeader(props): detail header UI for active or archived products.
  *
  * Inputs:
- *   Merged Product plus navigation/refresh/Ask AI callbacks.
+ *   Merged Product plus back/refresh/Ask AI callbacks.
  *
  * Outputs:
- *   Header UI and action callbacks to ProductDetail.
+ *   Read-only product header plus ProductDetailActions.
  */
 
 import { ArrowLeft, ExternalLink, Store } from "lucide-react";
 
+import { ProductArchiveBadge } from "@/components/products/ProductArchiveBadge";
 import { ProductDetailActions } from "@/components/products/ProductDetailActions";
-import { ProductLifecycleBadge } from "@/components/products/ProductLifecycleBadge";
+import { ProductPurchaseInfo } from "@/components/products/ProductPurchaseInfo";
 import { ProductStatusBadge } from "@/components/products/ProductStatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -44,14 +45,13 @@ export function ProductDetailHeader({
   const totalStore = product.store ?? null;
   const unitStore = product.unit_store ?? null;
   const unit = product.unit ?? null;
+  const isArchived = product.archived_at !== null;
   const isNotRun = product.status === "not_run";
-
 
   async function handleDeleted() {
     await onRefresh();
     onBack();
   }
-
 
   return (
     <div className="space-y-5">
@@ -73,32 +73,33 @@ export function ProductDetailHeader({
               {product.name}
             </h1>
 
-            <ProductLifecycleBadge savedType={product.saved_type} />
-            <ProductStatusBadge status={product.status} />
+            <ProductArchiveBadge archivedAt={product.archived_at} />
+            {!isArchived && <ProductStatusBadge status={product.status} />}
           </div>
 
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Store className="size-4" />
-
-              {isNotRun
-                ? "Waiting for first run"
-                : `${offers.length} ${offers.length === 1 ? "store" : "stores"}`}
+              {isArchived
+                ? "Archived · scraper skipped"
+                : isNotRun
+                  ? "Waiting for first run"
+                  : `${offers.length} ${offers.length === 1 ? "store" : "stores"}`}
             </span>
 
-            {totalStore && (
+            {!isArchived && totalStore && (
               <span>
-                Lowest total:{" "}
-                <strong className="text-foreground">{totalStore}</strong>
+                Lowest total: <strong className="text-foreground">{totalStore}</strong>
               </span>
             )}
 
-            {unitStore && (
+            {!isArchived && unitStore && (
               <span>
-                Lowest unit:{" "}
-                <strong className="text-foreground">{unitStore}</strong>
+                Lowest unit: <strong className="text-foreground">{unitStore}</strong>
               </span>
             )}
+
+            <ProductPurchaseInfo product={product} />
           </div>
 
           <div className="mt-4">
@@ -113,36 +114,32 @@ export function ProductDetailHeader({
 
         <div className="shrink-0 lg:text-right">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Lowest total
+            {isArchived ? "Last purchase" : "Lowest total"}
           </p>
 
           <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
-            {product.current_price !== null
-              ? formatPrice(product.current_price)
+            {(isArchived ? product.last_purchase_price : product.current_price) !== null
+              ? formatPrice((isArchived ? product.last_purchase_price : product.current_price)!)
               : "—"}
 
-            {product.current_price !== null && (
+            {(isArchived ? product.last_purchase_price : product.current_price) !== null && (
               <span className="ml-1 text-sm font-normal text-muted-foreground">
                 {product.currency}
               </span>
             )}
           </p>
 
-          {isNotRun && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              No price data yet
-            </p>
+          {!isArchived && isNotRun && (
+            <p className="mt-2 text-sm text-muted-foreground">No price data yet</p>
           )}
 
-          {!isNotRun && product.current_unit_price != null && (
+          {!isArchived && !isNotRun && product.current_unit_price != null && (
             <p className="mt-2 text-sm font-medium text-muted-foreground">
-              {formatPrice(product.current_unit_price, 4)}{" "}
-              {product.currency}
-              {unit ? `/${unit}` : ""}
+              {formatPrice(product.current_unit_price, 4)} {product.currency}{unit ? `/${unit}` : ""}
             </p>
           )}
 
-          {!isNotRun && product.url && (
+          {!isArchived && !isNotRun && product.url && (
             <a
               href={product.url}
               target="_blank"

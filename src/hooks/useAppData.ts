@@ -1,20 +1,20 @@
 /**
  * File: hooks/useAppData.ts
  * Purpose:
- *   Loads PriceWatch dashboard data and merges current-schema scraper snapshots
- *   with persistent product configuration by stable product_id only. The scraper
- *   remains unaware of owned/subscription fields; this hook adds lifecycle data.
+ *   Loads product dashboard data and merges scraper latest.json with ProductConfig
+ *   by stable product_id. Purchase/archive fields come from ProductConfig; archived
+ *   products may have no latest run because the scraper intentionally skips them.
  *
  * Main functions:
- *   - mergeDashboardProducts(latest, configs): merge latest scraper result + config.
- *   - useAppData(): fetch latest prices, configs, history index/data and run status.
- *   - refresh(showLoading): reload all dashboard data after edits/lifecycle actions.
+ *   - mergeDashboardProducts(latest, configs): combine scraper state + config.
+ *   - useAppData(): fetch latest prices, configs, compact history and run metadata.
+ *   - refresh(showLoading): reload application product data.
  *
  * Inputs:
- *   API responses from latest, product-config, history and run endpoints.
+ *   /api/latest, /api/product-config, /api/history and /api/runs/latest responses.
  *
  * Outputs:
- *   latestData, historyData, latestRun, loading/error state, and refresh().
+ *   Merged latestData, compact historyData, run metadata, loading/error and refresh().
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -49,17 +49,12 @@ function mergeDashboardProducts(
       .map(product => [product.product_id, product]),
   );
 
-
   const products: Product[] = configs.map(config => {
     const latest = latestById.get(config.id);
-
-    const lifecycle = {
-      saved_type: config.saved_type,
-      purchase_price: config.purchase_price,
-      purchase_date: config.purchase_date,
-      subscription_price: config.subscription_price,
-      billing_interval: config.billing_interval,
-      next_billing_date: config.next_billing_date,
+    const userContext = {
+      last_purchase_price: config.last_purchase_price,
+      last_purchase_date: config.last_purchase_date,
+      archived_at: config.archived_at,
     };
 
     if (latest) {
@@ -72,7 +67,7 @@ function mergeDashboardProducts(
         target_unit_price: config.target_unit_price,
         unit: config.unit,
         currency: config.currency,
-        ...lifecycle,
+        ...userContext,
       };
     }
 
@@ -109,7 +104,7 @@ function mergeDashboardProducts(
       review_method: null,
       reviewed_at: null,
 
-      ...lifecycle,
+      ...userContext,
     };
   });
 
@@ -127,7 +122,6 @@ export function useAppData() {
   const [latestRun, setLatestRun] = useState<RunMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
 
   const refresh = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -172,11 +166,9 @@ export function useAppData() {
     }
   }, []);
 
-
   useEffect(() => {
     void refresh(true);
   }, [refresh]);
-
 
   return {
     latestData,

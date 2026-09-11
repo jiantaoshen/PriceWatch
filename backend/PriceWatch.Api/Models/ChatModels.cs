@@ -2,9 +2,8 @@
 // File: Models/ChatModels.cs
 // Purpose:
 //   Defines the API models used by PriceWatch chat/advisor requests. Product
-//   context now carries scraper price facts, unit-price facts, and the small
-//   owned/subscription lifecycle fields without changing the advisor response
-//   contract itself.
+//   context carries scraper price facts, unit-price facts, and lightweight last-purchase
+//   / archive context without changing the advisor response contract itself.
 //
 // Main types:
 //   - AdvisorDto: advisor metadata shown by the frontend.
@@ -62,9 +61,7 @@ public sealed class AiProductContext
     public string Name { get; init; } = "";
     public string Currency { get; init; } = "";
 
-    public SavedProductType SavedType { get; init; } = SavedProductType.Tracked;
-
-    public double? ComparisonQuantity { get; init; }
+        public double? ComparisonQuantity { get; init; }
     public string? Unit { get; init; }
 
     // Total/comparable-total price facts.
@@ -83,14 +80,10 @@ public sealed class AiProductContext
     public double? HistoricalHighUnitPrice { get; init; }
     public double? HistoricalAverageUnitPrice { get; init; }
 
-    // Owned lifecycle context.
-    public double? PurchasePrice { get; init; }
-    public DateOnly? PurchaseDate { get; init; }
-
-    // Subscription lifecycle context.
-    public double? SubscriptionPrice { get; init; }
-    public BillingInterval? BillingInterval { get; init; }
-    public DateOnly? NextBillingDate { get; init; }
+    // Lightweight purchase/archive context. Purchase is not an ownership state.
+    public double? LastPurchasePrice { get; init; }
+    public DateOnly? LastPurchaseDate { get; init; }
+    public DateTimeOffset? ArchivedAt { get; init; }
 
     public List<AiPricePoint> History { get; init; } = [];
 }

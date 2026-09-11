@@ -1,27 +1,27 @@
 // ============================================================================
 // File: Services/ProductConfigService.cs
 // Purpose:
-//   Owns reading, validating, creating, editing, deleting, lifecycle updates and
-//   source-level manual price overrides for python/products.json. Normal edits
-//   preserve ownership/subscription fields unless a lifecycle action changes them.
+//   Owns current-schema product configuration in python/products.json. Products
+//   stay scraper-oriented; purchase is stored only as the latest purchase reference
+//   and archived_at separates active tracking from archived products.
 //
 // Main functions:
-//   - GetAllAsync(): returns all saved ProductConfig records.
-//   - GetByIdAsync(id): returns one ProductConfig or throws if it does not exist.
-//   - CreateAsync(input): creates a new Tracked product.
-//   - UpdateAsync(id, input): updates scraper config while preserving lifecycle.
-//   - MarkOwnedAsync(id, input): marks product Owned and clears subscription data.
-//   - MarkSubscriptionAsync(id, input): marks Subscription and clears purchase data.
-//   - MarkTrackedAsync(id): returns product to Tracked and clears lifecycle data.
-//   - SetManualSourcePriceAsync(id, input): switch one source to trusted manual mode.
-//   - DeleteAsync(id): removes a product.
+//   - GetAllAsync(): return all active + archived product configs.
+//   - GetByIdAsync(id): return one product config.
+//   - CreateAsync(input): create an active scraper product.
+//   - UpdateAsync(id, input): edit scraper config while preserving purchase/archive data.
+//   - RecordPurchaseAsync(id, input): save last purchase and optionally archive.
+//   - ArchiveAsync(id): archive a product without deleting its configuration/history.
+//   - RestoreAsync(id): return an archived product to active tracking.
+//   - SetManualSourcePriceAsync(id, input): switch one source to manual price mode.
+//   - DeleteAsync(id): permanently remove the product configuration.
 //
 // Inputs:
-//   Current-format python/products.json, ProductConfigInput for scraper configuration,
-//   lifecycle DTOs, and SetManualSourcePriceInput for a user-entered source price.
+//   Current-format python/products.json, ProductConfigInput, RecordProductPurchaseInput,
+//   and SetManualSourcePriceInput.
 //
 // Outputs:
-//   ProductConfig objects and an atomically rewritten python/products.json file.
+//   ProductConfig values and an atomically rewritten python/products.json file.
 // ============================================================================
 
 using System.Text;
@@ -42,10 +42,7 @@ public sealed class ProductConfigService
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
-        Converters =
-        {
-            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
-        },
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
 
@@ -66,7 +63,6 @@ public sealed class ProductConfigService
         try
         {
             var json = await File.ReadAllTextAsync(_productsFile);
-
             if (string.IsNullOrWhiteSpace(json)) return [];
 
             return JsonSerializer.Deserialize<List<ProductConfig>>(
@@ -77,7 +73,7 @@ public sealed class ProductConfigService
         catch (JsonException exception)
         {
             throw new InvalidOperationException(
-                "products.json contains invalid JSON.",
+                "products.json does not match the current ProductConfig schema.",
                 exception
             );
         }
@@ -87,14 +83,13 @@ public sealed class ProductConfigService
     public async Task<ProductConfig> GetByIdAsync(string id)
     {
         RequireId(id);
-
         var products = await GetAllAsync();
         return FindRequired(products, id);
     }
 
 
     // ========================================================================
-    // Create / normal scraper-config update
+    // Create / scraper-config update
     // ========================================================================
 
     public async Task<ProductConfig> CreateAsync(ProductConfigInput input)
@@ -102,11 +97,9 @@ public sealed class ProductConfigService
         ValidateProductInput(input);
 
         await _writeLock.WaitAsync();
-
         try
         {
             var products = await GetAllAsync();
-
             var product = MapProduct(
                 GenerateId(products),
                 input,
@@ -115,7 +108,6 @@ public sealed class ProductConfigService
 
             products.Add(product);
             await SaveAsync(products);
-
             return product;
         }
         finally
@@ -134,15 +126,12 @@ public sealed class ProductConfigService
         ValidateProductInput(input);
 
         await _writeLock.WaitAsync();
-
         try
         {
             var products = await GetAllAsync();
             var index = FindIndexRequired(products, id);
             var existing = products[index];
 
-            // Important: a normal edit only updates scraper-oriented fields.
-            // Purchase/subscription lifecycle data survives the edit.
             var updated = MapProduct(
                 existing.Id,
                 input,
@@ -151,7 +140,6 @@ public sealed class ProductConfigService
 
             products[index] = updated;
             await SaveAsync(products);
-
             return updated;
         }
         finally
@@ -162,56 +150,48 @@ public sealed class ProductConfigService
 
 
     // ========================================================================
-    // Lifecycle actions
+    // Purchase / archive lifecycle
     // ========================================================================
 
-    public async Task<ProductConfig> MarkOwnedAsync(
+    public async Task<ProductConfig> RecordPurchaseAsync(
         string id,
-        MarkProductOwnedInput input
+        RecordProductPurchaseInput input
     )
     {
         RequireId(id);
-        ValidateOptionalPositive(input.PurchasePrice, "Purchase price");
+        ValidateOptionalPositive(input.LastPurchasePrice, "Last purchase price");
 
         return await UpdateLifecycleAsync(
             id,
             existing => CopyWithLifecycle(
                 existing,
-                savedType: SavedProductType.Owned,
-                purchasePrice: input.PurchasePrice,
-                purchaseDate: input.PurchaseDate,
-                subscriptionPrice: null,
-                billingInterval: null,
-                nextBillingDate: null
+                lastPurchasePrice: input.LastPurchasePrice,
+                lastPurchaseDate: input.LastPurchaseDate,
+                archivedAt: input.ArchiveAfterPurchase
+                    ? DateTimeOffset.UtcNow
+                    : existing.ArchivedAt
             )
         );
     }
 
 
-    public async Task<ProductConfig> MarkSubscriptionAsync(
-        string id,
-        MarkSubscriptionInput input
-    )
+    public async Task<ProductConfig> ArchiveAsync(string id)
     {
         RequireId(id);
-        ValidateOptionalPositive(input.SubscriptionPrice, "Subscription price");
 
         return await UpdateLifecycleAsync(
             id,
             existing => CopyWithLifecycle(
                 existing,
-                savedType: SavedProductType.Subscription,
-                purchasePrice: null,
-                purchaseDate: null,
-                subscriptionPrice: input.SubscriptionPrice,
-                billingInterval: input.BillingInterval,
-                nextBillingDate: input.NextBillingDate
+                lastPurchasePrice: existing.LastPurchasePrice,
+                lastPurchaseDate: existing.LastPurchaseDate,
+                archivedAt: existing.ArchivedAt ?? DateTimeOffset.UtcNow
             )
         );
     }
 
 
-    public async Task<ProductConfig> MarkTrackedAsync(string id)
+    public async Task<ProductConfig> RestoreAsync(string id)
     {
         RequireId(id);
 
@@ -219,12 +199,9 @@ public sealed class ProductConfigService
             id,
             existing => CopyWithLifecycle(
                 existing,
-                savedType: SavedProductType.Tracked,
-                purchasePrice: null,
-                purchaseDate: null,
-                subscriptionPrice: null,
-                billingInterval: null,
-                nextBillingDate: null
+                lastPurchasePrice: existing.LastPurchasePrice,
+                lastPurchaseDate: existing.LastPurchaseDate,
+                archivedAt: null
             )
         );
     }
@@ -236,15 +213,13 @@ public sealed class ProductConfigService
     )
     {
         await _writeLock.WaitAsync();
-
         try
         {
             var products = await GetAllAsync();
             var index = FindIndexRequired(products, id);
-
             var updated = update(products[index]);
-            products[index] = updated;
 
+            products[index] = updated;
             await SaveAsync(products);
             return updated;
         }
@@ -274,7 +249,6 @@ public sealed class ProductConfigService
         RequirePositive(input.ManualPrice, "Manual price");
 
         await _writeLock.WaitAsync();
-
         try
         {
             var products = await GetAllAsync();
@@ -296,7 +270,6 @@ public sealed class ProductConfigService
                     }
 
                     found = true;
-
                     return new ProductSource
                     {
                         Store = source.Store,
@@ -319,7 +292,6 @@ public sealed class ProductConfigService
             var updated = CopyWithSources(existing, sources);
             products[index] = updated;
             await SaveAsync(products);
-
             return updated;
         }
         finally
@@ -338,18 +310,14 @@ public sealed class ProductConfigService
         RequireId(id);
 
         await _writeLock.WaitAsync();
-
         try
         {
             var products = await GetAllAsync();
-
-            var removed = products.RemoveAll(
-                product => string.Equals(
-                    product.Id,
-                    id,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            );
+            var removed = products.RemoveAll(product => string.Equals(
+                product.Id,
+                id,
+                StringComparison.OrdinalIgnoreCase
+            ));
 
             if (removed == 0)
             {
@@ -372,7 +340,6 @@ public sealed class ProductConfigService
     private async Task SaveAsync(List<ProductConfig> products)
     {
         var directory = Path.GetDirectoryName(_productsFile);
-
         if (string.IsNullOrWhiteSpace(directory))
         {
             throw new InvalidOperationException(
@@ -418,9 +385,7 @@ public sealed class ProductConfigService
 
         if (input.Sources is null || input.Sources.Count == 0)
         {
-            throw new ArgumentException(
-                "At least one store source is required."
-            );
+            throw new ArgumentException("At least one store source is required.");
         }
 
         RequirePositive(input.TargetPrice, "Target price");
@@ -442,9 +407,7 @@ public sealed class ProductConfigService
 
             if (string.IsNullOrWhiteSpace(source.Store))
             {
-                throw new ArgumentException(
-                    $"Store {number}: name is required."
-                );
+                throw new ArgumentException($"Store {number}: name is required.");
             }
 
             ValidateUrl(source.Url, number, urls);
@@ -463,10 +426,7 @@ public sealed class ProductConfigService
                 $"Store {number}: manual price"
             );
 
-            var shouldScrape =
-                input.ScrapingEnabled &&
-                source.ScrapingEnabled;
-
+            var shouldScrape = input.ScrapingEnabled && source.ScrapingEnabled;
             if (!shouldScrape && source.ManualPrice is null)
             {
                 throw new ArgumentException(
@@ -497,17 +457,13 @@ public sealed class ProductConfigService
     {
         if (string.IsNullOrWhiteSpace(url))
         {
-            throw new ArgumentException(
-                $"Store {number}: URL is required."
-            );
+            throw new ArgumentException($"Store {number}: URL is required.");
         }
 
         var trimmed = url.Trim();
-
         if (
             !Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp &&
-             uri.Scheme != Uri.UriSchemeHttps)
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
         )
         {
             throw new ArgumentException(
@@ -522,10 +478,7 @@ public sealed class ProductConfigService
     }
 
 
-    private static void ValidateOptionalPositive(
-        double? value,
-        string label
-    )
+    private static void ValidateOptionalPositive(double? value, string label)
     {
         if (value is not null)
         {
@@ -538,9 +491,7 @@ public sealed class ProductConfigService
     {
         if (!double.IsFinite(value) || value <= 0)
         {
-            throw new ArgumentException(
-                $"{label} must be greater than 0."
-            );
+            throw new ArgumentException($"{label} must be greater than 0.");
         }
     }
 
@@ -563,13 +514,11 @@ public sealed class ProductConfigService
         string id
     )
     {
-        return products.FirstOrDefault(
-            product => string.Equals(
-                product.Id,
-                id,
-                StringComparison.OrdinalIgnoreCase
-            )
-        ) ?? throw new KeyNotFoundException("Product not found.");
+        return products.FirstOrDefault(product => string.Equals(
+            product.Id,
+            id,
+            StringComparison.OrdinalIgnoreCase
+        )) ?? throw new KeyNotFoundException("Product not found.");
     }
 
 
@@ -594,25 +543,18 @@ public sealed class ProductConfigService
     }
 
 
-    private static string GenerateId(
-        IEnumerable<ProductConfig> products
-    )
+    private static string GenerateId(IEnumerable<ProductConfig> products)
     {
         string id;
-
         do
         {
             id = Guid.NewGuid().ToString("N")[..16];
         }
-        while (
-            products.Any(
-                product => string.Equals(
-                    product.Id,
-                    id,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
-        );
+        while (products.Any(product => string.Equals(
+            product.Id,
+            id,
+            StringComparison.OrdinalIgnoreCase
+        )));
 
         return id;
     }
@@ -632,10 +574,8 @@ public sealed class ProductConfigService
         {
             Id = id,
             Name = input.Name.Trim(),
-            SavedType = lifecycleSource?.SavedType ?? SavedProductType.Tracked,
             ScrapingEnabled = input.ScrapingEnabled,
             ComparisonQuantity = input.ComparisonQuantity,
-
             Sources = input.Sources
                 .Select(source => new ProductSource
                 {
@@ -647,37 +587,29 @@ public sealed class ProductConfigService
                     Note = Clean(source.Note),
                 })
                 .ToList(),
-
             TargetPrice = input.TargetPrice,
             TargetUnitPrice = input.TargetUnitPrice,
             Unit = Clean(input.Unit),
             Currency = input.Currency.Trim().ToUpperInvariant(),
 
-            PurchasePrice = lifecycleSource?.PurchasePrice,
-            PurchaseDate = lifecycleSource?.PurchaseDate,
-
-            SubscriptionPrice = lifecycleSource?.SubscriptionPrice,
-            BillingInterval = lifecycleSource?.BillingInterval,
-            NextBillingDate = lifecycleSource?.NextBillingDate,
+            LastPurchasePrice = lifecycleSource?.LastPurchasePrice,
+            LastPurchaseDate = lifecycleSource?.LastPurchaseDate,
+            ArchivedAt = lifecycleSource?.ArchivedAt,
         };
     }
 
 
     private static ProductConfig CopyWithLifecycle(
         ProductConfig source,
-        SavedProductType savedType,
-        double? purchasePrice,
-        DateOnly? purchaseDate,
-        double? subscriptionPrice,
-        BillingInterval? billingInterval,
-        DateOnly? nextBillingDate
+        double? lastPurchasePrice,
+        DateOnly? lastPurchaseDate,
+        DateTimeOffset? archivedAt
     )
     {
         return new ProductConfig
         {
             Id = source.Id,
             Name = source.Name,
-            SavedType = savedType,
             ScrapingEnabled = source.ScrapingEnabled,
             ComparisonQuantity = source.ComparisonQuantity,
             Sources = source.Sources,
@@ -685,13 +617,9 @@ public sealed class ProductConfigService
             TargetUnitPrice = source.TargetUnitPrice,
             Unit = source.Unit,
             Currency = source.Currency,
-
-            PurchasePrice = purchasePrice,
-            PurchaseDate = purchaseDate,
-
-            SubscriptionPrice = subscriptionPrice,
-            BillingInterval = billingInterval,
-            NextBillingDate = nextBillingDate,
+            LastPurchasePrice = lastPurchasePrice,
+            LastPurchaseDate = lastPurchaseDate,
+            ArchivedAt = archivedAt,
         };
     }
 
@@ -705,7 +633,6 @@ public sealed class ProductConfigService
         {
             Id = source.Id,
             Name = source.Name,
-            SavedType = source.SavedType,
             ScrapingEnabled = source.ScrapingEnabled,
             ComparisonQuantity = source.ComparisonQuantity,
             Sources = sources,
@@ -713,21 +640,15 @@ public sealed class ProductConfigService
             TargetUnitPrice = source.TargetUnitPrice,
             Unit = source.Unit,
             Currency = source.Currency,
-
-            PurchasePrice = source.PurchasePrice,
-            PurchaseDate = source.PurchaseDate,
-
-            SubscriptionPrice = source.SubscriptionPrice,
-            BillingInterval = source.BillingInterval,
-            NextBillingDate = source.NextBillingDate,
+            LastPurchasePrice = source.LastPurchasePrice,
+            LastPurchaseDate = source.LastPurchaseDate,
+            ArchivedAt = source.ArchivedAt,
         };
     }
 
 
     private static string? Clean(string? value)
     {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 }

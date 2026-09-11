@@ -1,27 +1,26 @@
 /**
  * File: components/products/ProductDetailActions.tsx
  * Purpose:
- *   Central action bar for one product. It keeps edit/delete/Ask AI actions and
- *   adds the lightweight lifecycle actions: mark purchased, mark subscription,
- *   and return an Owned/Subscription item to tracking-only.
+ *   Provides product actions for the simplified lifecycle: edit scraper config,
+ *   record latest purchase, archive/restore, Ask AI and permanent delete.
  *
  * Main functions:
- *   - ProductDetailActions(props): renders actions appropriate for saved_type.
- *   - handleDelete(): deletes ProductConfig and notifies the parent.
- *   - handleMarkTracked(): clears lifecycle fields but keeps scraper configuration.
+ *   - ProductDetailActions(props): renders active/archived actions.
+ *   - handleArchive(): archives the product without deleting data/history.
+ *   - handleRestore(): restores the product to active scraper tracking.
+ *   - handleDelete(): permanently removes ProductConfig.
  *
  * Inputs:
- *   Full Product object plus refresh/delete/Ask AI callbacks.
+ *   Merged Product and parent refresh/delete/AI callbacks.
  *
  * Outputs:
- *   API mutations through productConfigApi and parent refresh callbacks.
+ *   Product API mutations plus parent refresh/navigation callbacks.
  */
 
 import { useState } from "react";
-import { Bot, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, Bot, RotateCcw, Trash2 } from "lucide-react";
 
 import { MarkAsPurchasedDialog } from "@/components/products/MarkAsPurchasedDialog";
-import { MarkAsSubscriptionDialog } from "@/components/products/MarkAsSubscriptionDialog";
 import { ProductFormDialog } from "@/components/products/ProductFormDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,8 +33,9 @@ import {
 } from "@/components/ui/dialog";
 
 import {
+  archiveProduct,
   deleteProductConfig,
-  markProductTracked,
+  restoreProduct,
 } from "@/services/productConfigApi";
 
 import type { Product } from "@/types/product";
@@ -55,65 +55,66 @@ export function ProductDetailActions({
   onDeleted,
   onAskAi,
 }: ProductDetailActionsProps) {
-  const [trackOnlyOpen, setTrackOnlyOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isMarkingTracked, setIsMarkingTracked] = useState(false);
+  const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isTracked = product.saved_type === "tracked";
-  const isOwned = product.saved_type === "owned";
-  const isSubscription = product.saved_type === "subscription";
+  const isArchived = product.archived_at !== null;
   const actualWinnerPrice = getActualWinnerPrice(product);
 
-
-  async function handleDelete() {
-    if (isDeleting) return;
+  async function handleArchive() {
+    if (working) return;
 
     try {
+      setWorking(true);
       setError(null);
-      setIsDeleting(true);
+      await archiveProduct(product.product_id);
+      await onUpdated?.();
+      setArchiveOpen(false);
+    }
+    catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Failed to archive product.");
+    }
+    finally {
+      setWorking(false);
+    }
+  }
 
+  async function handleRestore() {
+    if (working) return;
+
+    try {
+      setWorking(true);
+      setError(null);
+      await restoreProduct(product.product_id);
+      await onUpdated?.();
+    }
+    catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Failed to restore product.");
+    }
+    finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (working) return;
+
+    try {
+      setWorking(true);
+      setError(null);
       await deleteProductConfig(product.product_id);
       await onDeleted?.();
       setDeleteOpen(false);
     }
     catch (exception) {
-      setError(
-        exception instanceof Error
-          ? exception.message
-          : "Failed to delete product.",
-      );
+      setError(exception instanceof Error ? exception.message : "Failed to delete product.");
     }
     finally {
-      setIsDeleting(false);
+      setWorking(false);
     }
   }
-
-
-  async function handleMarkTracked() {
-    if (isMarkingTracked) return;
-
-    try {
-      setError(null);
-      setIsMarkingTracked(true);
-
-      await markProductTracked(product.product_id);
-      await onUpdated?.();
-      setTrackOnlyOpen(false);
-    }
-    catch (exception) {
-      setError(
-        exception instanceof Error
-          ? exception.message
-          : "Failed to return product to tracking-only.",
-      );
-    }
-    finally {
-      setIsMarkingTracked(false);
-    }
-  }
-
 
   return (
     <div className="space-y-3">
@@ -124,78 +125,43 @@ export function ProductDetailActions({
           onSaved={onUpdated}
         />
 
-        {isTracked && (
-          <>
-            <MarkAsPurchasedDialog
-              productId={product.product_id}
-              productName={product.name}
-              currency={product.currency}
-              defaultPrice={actualWinnerPrice}
-              purchasePrice={product.purchase_price}
-              purchaseDate={product.purchase_date}
-              onSaved={onUpdated}
-            />
+        <MarkAsPurchasedDialog
+          productId={product.product_id}
+          productName={product.name}
+          currency={product.currency}
+          defaultPrice={actualWinnerPrice}
+          lastPurchasePrice={product.last_purchase_price}
+          lastPurchaseDate={product.last_purchase_date}
+          isArchived={isArchived}
+          onSaved={onUpdated}
+        />
 
-            <MarkAsSubscriptionDialog
-              productId={product.product_id}
-              productName={product.name}
-              currency={product.currency}
-              defaultPrice={actualWinnerPrice}
-              subscriptionPrice={product.subscription_price}
-              billingInterval={product.billing_interval}
-              nextBillingDate={product.next_billing_date}
-              onSaved={onUpdated}
-            />
-          </>
-        )}
-
-        {isOwned && (
-          <MarkAsPurchasedDialog
-            productId={product.product_id}
-            productName={product.name}
-            currency={product.currency}
-            defaultPrice={actualWinnerPrice}
-            purchasePrice={product.purchase_price}
-            purchaseDate={product.purchase_date}
-            isOwned
-            onSaved={onUpdated}
-          />
-        )}
-
-        {isSubscription && (
-          <MarkAsSubscriptionDialog
-            productId={product.product_id}
-            productName={product.name}
-            currency={product.currency}
-            defaultPrice={actualWinnerPrice}
-            subscriptionPrice={product.subscription_price}
-            billingInterval={product.billing_interval}
-            nextBillingDate={product.next_billing_date}
-            isSubscription
-            onSaved={onUpdated}
-          />
-        )}
-
-        {!isTracked && (
+        {isArchived ? (
           <Button
             type="button"
             variant="outline"
-            disabled={isMarkingTracked}
-            onClick={() => {
-              setError(null);
-              setTrackOnlyOpen(true);
-            }}
+            disabled={working}
+            onClick={() => void handleRestore()}
           >
             <RotateCcw data-icon="inline-start" />
-            Tracking only
+            {working ? "Restoring..." : "Restore tracking"}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={working}
+            onClick={() => {
+              setError(null);
+              setArchiveOpen(true);
+            }}
+          >
+            <Archive data-icon="inline-start" />
+            Archive
           </Button>
         )}
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onAskAi}
-        >
+        <Button type="button" variant="outline" onClick={onAskAi}>
           <Bot data-icon="inline-start" />
           Ask AI
         </Button>
@@ -213,25 +179,25 @@ export function ProductDetailActions({
         </Button>
       </div>
 
-      {error && !deleteOpen && !trackOnlyOpen && (
+      {error && !archiveOpen && !deleteOpen && (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
       <Dialog
-        open={trackOnlyOpen}
+        open={archiveOpen}
         onOpenChange={nextOpen => {
-          if (!nextOpen && isMarkingTracked) return;
-          setTrackOnlyOpen(nextOpen);
+          if (!nextOpen && working) return;
+          setArchiveOpen(nextOpen);
           if (!nextOpen) setError(null);
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Return to tracking only?</DialogTitle>
+            <DialogTitle>Archive product?</DialogTitle>
             <DialogDescription>
-              Price tracking will continue, but saved purchase or subscription details for {product.name} will be cleared.
+              {product.name} will stay saved with its purchase/history data, but future scraper runs will skip it.
             </DialogDescription>
           </DialogHeader>
 
@@ -242,22 +208,12 @@ export function ProductDetailActions({
           )}
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isMarkingTracked}
-              onClick={() => setTrackOnlyOpen(false)}
-            >
+            <Button type="button" variant="outline" disabled={working} onClick={() => setArchiveOpen(false)}>
               Cancel
             </Button>
-
-            <Button
-              type="button"
-              disabled={isMarkingTracked}
-              onClick={() => void handleMarkTracked()}
-            >
-              <RotateCcw data-icon="inline-start" />
-              {isMarkingTracked ? "Updating..." : "Tracking only"}
+            <Button type="button" disabled={working} onClick={() => void handleArchive()}>
+              <Archive data-icon="inline-start" />
+              {working ? "Archiving..." : "Archive"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -266,8 +222,7 @@ export function ProductDetailActions({
       <Dialog
         open={deleteOpen}
         onOpenChange={nextOpen => {
-          if (!nextOpen && isDeleting) return;
-
+          if (!nextOpen && working) return;
           setDeleteOpen(nextOpen);
           if (!nextOpen) setError(null);
         }}
@@ -275,13 +230,8 @@ export function ProductDetailActions({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete product?</DialogTitle>
-
             <DialogDescription>
-              This will remove{" "}
-              <span className="font-medium text-foreground">
-                {product.name}
-              </span>{" "}
-              from your product configuration.
+              This permanently removes <span className="font-medium text-foreground">{product.name}</span> from product configuration.
             </DialogDescription>
           </DialogHeader>
 
@@ -292,23 +242,12 @@ export function ProductDetailActions({
           )}
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isDeleting}
-              onClick={() => setDeleteOpen(false)}
-            >
+            <Button type="button" variant="outline" disabled={working} onClick={() => setDeleteOpen(false)}>
               Cancel
             </Button>
-
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isDeleting}
-              onClick={() => void handleDelete()}
-            >
+            <Button type="button" variant="destructive" disabled={working} onClick={() => void handleDelete()}>
               <Trash2 data-icon="inline-start" />
-              {isDeleting ? "Deleting..." : "Delete product"}
+              {working ? "Deleting..." : "Delete product"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -319,26 +258,18 @@ export function ProductDetailActions({
 
 
 function getActualWinnerPrice(product: Product): number | null {
-  // With comparison_quantity enabled, product.current_price is a normalized
-  // comparison total, not necessarily the package price the user would pay.
-  // Prefer the winning offer's raw package price for lifecycle defaults.
   const offers = product.offers ?? [];
 
   const byUrl = product.url
     ? offers.find(offer => offer.url === product.url)
     : undefined;
-
   if (byUrl) return byUrl.price;
 
   const byStore = product.store
     ? offers.find(offer => offer.store === product.store)
     : undefined;
-
   if (byStore) return byStore.price;
 
-  // current_price is safe as an actual price only when no comparison quantity
-  // normalization is configured. Otherwise leave the default blank rather than
-  // pre-filling a potentially misleading purchase/subscription amount.
   return product.comparison_quantity == null
     ? product.current_price
     : null;

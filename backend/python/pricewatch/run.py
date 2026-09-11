@@ -1,3 +1,21 @@
+"""
+File: pricewatch/run.py
+Purpose:
+    Builds scraper run metadata. Archived products are excluded before this module
+    is called, so total_products represents ACTIVE products only.
+
+Main types/functions:
+    - RunMetadata: persisted health/result metadata for one scraper execution.
+    - build_run_metadata(...): derive success/degraded/failed and duration.
+
+Inputs:
+    Run timestamps plus active-product success/failed/suspicious counts.
+
+Outputs:
+    RunMetadata written by webscraping.py to data/runs/*.json.
+    A run with zero active products is a clean success, not a scraper failure.
+"""
+
 from datetime import datetime
 from typing import Literal
 
@@ -39,18 +57,19 @@ def build_run_metadata(
         finished_at - started_at
     ).total_seconds()
 
-    # Nothing succeeded
-    if successful == 0:
-        status = "failed"
-
-    # Everything succeeded cleanly
-    elif (
-        failed == 0
-        and suspicious == 0
-    ):
+    # Nothing is configured for active tracking. This is healthy, not failed.
+    if total_products == 0:
         status = "success"
 
-    # At least one product had a problem
+    # Active products existed, but none succeeded.
+    elif successful == 0:
+        status = "failed"
+
+    # Everything succeeded cleanly.
+    elif failed == 0 and suspicious == 0:
+        status = "success"
+
+    # At least one active product had a problem.
     else:
         status = "degraded"
 

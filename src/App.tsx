@@ -1,3 +1,19 @@
+/**
+ * File: App.tsx
+ * Purpose:
+ *   Composes top-level PriceWatch views. Product price tracking and subscription
+ *   expense management are separate application domains/tabs.
+ *
+ * Main function:
+ *   - App(): owns navigation and selected-product state and wires shared product data.
+ *
+ * Inputs:
+ *   useAppData product/scraper state plus user navigation/selection actions.
+ *
+ * Outputs:
+ *   Products, Subscriptions, AI, Scraper, Automation and Email screens.
+ */
+
 import { useState } from "react";
 
 import { AiChat } from "@/components/ai/AiChat";
@@ -7,10 +23,12 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { ProductDetail } from "@/components/products/ProductDetail";
 import { ProductList } from "@/components/products/ProductList";
 import { ScraperDetail } from "@/components/scraper/ScraperDetail";
+import { SubscriptionsPage } from "@/components/subscriptions/SubscriptionsPage";
 
 import { useAppData } from "@/hooks/useAppData";
 
 import type { AppView } from "@/types/app";
+
 
 function App() {
   const data = useAppData();
@@ -70,6 +88,7 @@ function App() {
           <ProductDetail
             product={selectedProduct}
             history={data.historyData}
+            currentPeriod={data.latestData.period}
             onBack={handleBackFromProduct}
             onRefresh={data.refresh}
             onAskAi={() => handleAskAi(selectedProduct.product_id)}
@@ -80,12 +99,13 @@ function App() {
               <ProductList
                 data={data.latestData}
                 history={data.history}
-                onSelectProduct={product =>
-                  setSelectedProductId(product.product_id)
-                }
+                historyData={data.historyData}
+                onSelectProduct={product => setSelectedProductId(product.product_id)}
                 onRefresh={data.refresh}
               />
             )}
+
+            {view === "subscriptions" && <SubscriptionsPage />}
 
             {view === "ai" && (
               <AiChat initialProductIds={aiProductIds} />
@@ -110,4 +130,3 @@ function App() {
 }
 
 export default App;
-

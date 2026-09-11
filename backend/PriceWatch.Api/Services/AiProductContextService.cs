@@ -2,7 +2,7 @@
 // File: Services/AiProductContextService.cs
 // Purpose:
 //   Builds factual AI product context by combining ProductConfig with scraper
-//   latest snapshot and compact history files. Suspicious/failed latest candidates are never used
+//   latest snapshot and compact history files, plus lightweight purchase/archive context. Suspicious/failed latest candidates are never used
 //   as authoritative AI prices; the service falls back to accepted history until
 //   the user confirms or manually resolves the price.
 //
@@ -155,8 +155,6 @@ public sealed class AiProductContextService
                 ProductId = config.Id,
                 Name = config.Name,
                 Currency = config.Currency,
-                SavedType = config.SavedType,
-
                 ComparisonQuantity = config.ComparisonQuantity,
                 Unit = config.Unit,
 
@@ -183,12 +181,9 @@ public sealed class AiProductContextService
                     safeCurrentUnitPrice
                 ),
 
-                PurchasePrice = config.PurchasePrice,
-                PurchaseDate = config.PurchaseDate,
-
-                SubscriptionPrice = config.SubscriptionPrice,
-                BillingInterval = config.BillingInterval,
-                NextBillingDate = config.NextBillingDate,
+                LastPurchasePrice = config.LastPurchasePrice,
+                LastPurchaseDate = config.LastPurchaseDate,
+                ArchivedAt = config.ArchivedAt,
 
                 History = history,
             });
