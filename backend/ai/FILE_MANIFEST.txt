@@ -1,0 +1,33 @@
+Replacement AI folder
+
+Runtime:
+- main.py
+- advisor.py
+- models.py
+- facts.py
+- prompt_builder.py
+- ai_clients.py
+- validator.py
+- renderer.py
+- service.py
+- settings.py
+
+Testing:
+- direct_test.py
+- quick_test.py
+- sample_request.json
+- tests/test_facts.py
+- tests/test_validator.py
+- tests/test_service.py
+
+Configuration:
+- .env.local.example
+- .env.cloud-run.example
+- run_local.ps1
+- run_cloud_run.ps1
+- pyproject.toml
+
+Documentation:
+- README.md
+- MIGRATION_FROM_OLD_AI.md
+- TEST_RESULTS.txt

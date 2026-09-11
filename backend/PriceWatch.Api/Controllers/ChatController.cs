@@ -1,3 +1,22 @@
+// ============================================================================
+// File: Controllers/ChatController.cs
+// Purpose:
+//   Replaces the old streaming-chat controller with the structured V10.3 Advisor
+//   bridge used by React. The legacy filename is retained for a drop-in upgrade.
+//
+// Main endpoints:
+//   - GET  /api/ai/health: verifies which AI provider/model ASP.NET can reach.
+//   - POST /api/ai/recommend: builds trusted Product facts and requests one
+//     BUY/WAIT/NEUTRAL recommendation.
+//
+// Inputs:
+//   Product ID, advisor ID and optional user context from React.
+//
+// Outputs:
+//   V10.3 structured recommendation or a clear 4xx/502 error. This controller
+//   never changes the AI's final decision.
+// ============================================================================
+
 using Microsoft.AspNetCore.Mvc;
 
 using PriceWatch.Api.Models;
@@ -5,14 +24,16 @@ using PriceWatch.Api.Services;
 
 namespace PriceWatch.Api.Controllers;
 
+
 [ApiController]
-[Route("api/chat")]
-public sealed class ChatController : ControllerBase
+[Route("api/ai")]
+public sealed class AiController : ControllerBase
 {
     private readonly IAiService _aiService;
     private readonly AiProductContextService _contextService;
 
-    public ChatController(
+
+    public AiController(
         IAiService aiService,
         AiProductContextService contextService
     )
@@ -21,77 +42,83 @@ public sealed class ChatController : ControllerBase
         _contextService = contextService;
     }
 
-    [HttpPost("stream")]
-    public async Task Stream(
-        [FromBody] AiChatRequest request,
+
+    [HttpGet("health")]
+    public async Task<IActionResult> Health(
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var health = await _aiService.GetHealthAsync(cancellationToken);
+            return Ok(health);
+        }
+        catch (HttpRequestException exception)
+        {
+            return Problem(
+                title: "AI service unavailable",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status502BadGateway
+            );
+        }
+    }
+
+
+    [HttpPost("recommend")]
+    public async Task<IActionResult> Recommend(
+        [FromBody] AiRecommendationRequest request,
         CancellationToken cancellationToken
     )
     {
         if (string.IsNullOrWhiteSpace(request.AdvisorId))
         {
-            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return BadRequest(new { error = "Advisor ID is required." });
+        }
 
-            await Response.WriteAsJsonAsync(
-                new { error = "Advisor ID is required." },
-                cancellationToken
-            );
-
-            return;
+        if (string.IsNullOrWhiteSpace(request.ProductId))
+        {
+            return BadRequest(new { error = "Product ID is required." });
         }
 
         try
         {
             var products = await _contextService.BuildAsync(
-                request.ProductIds,
+                [request.ProductId],
                 cancellationToken
             );
 
-            var payload = new AiChatPayload
+            var product = products.SingleOrDefault();
+            if (product is null)
             {
-                AdvisorId = request.AdvisorId,
-                Products = products,
-                Messages = request.Messages,
-            };
+                return NotFound(new { error = "Product not found." });
+            }
 
-            Response.StatusCode = StatusCodes.Status200OK;
-            Response.ContentType = "text/plain; charset=utf-8";
+            if (product.CurrentPrice is null)
+            {
+                return UnprocessableEntity(new
+                {
+                    error = "No accepted price is available for AI analysis.",
+                });
+            }
 
-            await _aiService.StreamChatAsync(
-                payload,
-                Response.Body,
+            var result = await _aiService.RecommendAsync(
+                request,
+                product,
                 cancellationToken
             );
-        }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
-        {
+
+            return Ok(result);
         }
         catch (ArgumentException exception)
         {
-            if (Response.HasStarted)
-                throw;
-
-            Response.StatusCode = StatusCodes.Status400BadRequest;
-
-            await Response.WriteAsJsonAsync(
-                new { error = exception.Message },
-                cancellationToken
-            );
+            return BadRequest(new { error = exception.Message });
         }
         catch (HttpRequestException exception)
         {
-            if (Response.HasStarted)
-                throw;
-
-            Response.StatusCode = StatusCodes.Status502BadGateway;
-
-            await Response.WriteAsJsonAsync(
-                new
-                {
-                    error = "Local AI service unavailable.",
-                    detail = exception.Message,
-                },
-                cancellationToken
+            return Problem(
+                title: "AI service unavailable",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status502BadGateway
             );
         }
     }

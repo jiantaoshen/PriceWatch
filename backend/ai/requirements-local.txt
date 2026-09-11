@@ -1,0 +1,15 @@
+# ============================================================================
+# File: requirements-local.txt
+# Purpose:
+#   Minimal Python dependencies needed by the PriceWatch V10.3 AI gateway when
+#   running with the local Ollama provider.
+# Inputs:
+#   Installed by start-local.ps1 into backend/ai/.venv.
+# Outputs:
+#   FastAPI gateway capable of calling local Ollama/Qwen3-8B.
+# ============================================================================
+fastapi>=0.116.0
+httpx>=0.28.1
+pydantic>=2.11.0
+pydantic-settings>=2.10.0
+uvicorn>=0.35.0

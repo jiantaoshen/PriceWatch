@@ -1,14 +1,38 @@
-import { apiJson } from "@/services/api";
+/**
+ * File: services/aiApi.ts
+ * Purpose:
+ *   Calls the ASP.NET AI bridge from React. React never talks directly to Ollama
+ *   or the Python AI gateway, so the same frontend can later use Cloud Run without
+ *   changing browser networking code.
+ *
+ * Main functions:
+ *   - getAiHealth(): verifies ASP.NET -> AI gateway connectivity/provider.
+ *   - getAdvisors(): loads Steady/Balanced/Deal Hunter metadata.
+ *   - getRecommendation(): requests one V10.3 structured judgment.
+ *
+ * Inputs:
+ *   AiRecommendationRequest containing product ID, advisor and optional context.
+ *
+ * Outputs:
+ *   AiHealth, Advisor[] and AiRecommendationResponse objects.
+ */
 
-import type { Advisor, Message } from "@/types/chat";
+import { apiJson, jsonRequest } from "@/services/api";
 
-interface StreamChatOptions {
-  advisorId: string;
-  productIds: string[];
-  messages: Message[];
-  signal: AbortSignal;
-  onChunk: (chunk: string) => void;
+import type {
+  Advisor,
+  AiHealth,
+  AiRecommendationRequest,
+  AiRecommendationResponse,
+} from "@/types/chat";
+
+
+export function getAiHealth(): Promise<AiHealth> {
+  return apiJson<AiHealth>("/api/ai/health", {
+    cache: "no-store",
+  });
 }
+
 
 export function getAdvisors(): Promise<Advisor[]> {
   return apiJson<Advisor[]>("/api/advisors", {
@@ -16,41 +40,12 @@ export function getAdvisors(): Promise<Advisor[]> {
   });
 }
 
-export async function streamChat({
-  advisorId,
-  productIds,
-  messages,
-  signal,
-  onChunk,
-}: StreamChatOptions): Promise<void> {
-  const response = await fetch("/api/chat/stream", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      advisorId,
-      productIds,
-      messages,
-    }),
-    signal,
-  });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `HTTP ${response.status}`);
-  }
-
-  if (!response.body) {
-    throw new Error("Response body is empty.");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-    if (chunk) onChunk(chunk);
-  }
+export function getRecommendation(
+  request: AiRecommendationRequest,
+): Promise<AiRecommendationResponse> {
+  return apiJson<AiRecommendationResponse>(
+    "/api/ai/recommend",
+    jsonRequest("POST", request),
+  );
 }

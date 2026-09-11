@@ -1,0 +1,26 @@
+PriceWatch AI V10.3 replacement validation
+Date: 2026-09-11
+
+Static compile:
+- python -m compileall -q .
+- PASS
+
+Regression tests:
+- python -m unittest discover -s tests -v
+- 8/8 PASS
+
+Covered:
+- objective price relationships
+- recent trend facts
+- dynamic factor availability
+- budget / owned-similar / need / urgency / sensitivity / context factors
+- history-derived low and average fallback
+- V10.3 driver validation
+- duplicate/unknown driver rejection
+- end-to-end service orchestration with factual renderer
+
+Not executed in this sandbox:
+- live Ollama request
+- live private Google Cloud Run request
+Reason: this execution environment does not provide direct external network/model access.
+Use direct_test.py on your machine for both live providers.

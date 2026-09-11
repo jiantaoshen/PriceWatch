@@ -1,22 +1,21 @@
 // ============================================================================
 // File: Services/AiService.cs
 // Purpose:
-//   Bridges the ASP.NET API to the existing PriceWatch AI service. This file is
-//   intentionally kept compatible with the currently frozen V10.3 AI payload;
-//   richer lifecycle/unit facts are prepared in AiProductContextService but are
-//   not forwarded here until the external AI contract is deliberately updated.
+//   Calls the PriceWatch Python V10.3 AI gateway. The ASP.NET layer does not
+//   calculate BUY/WAIT/NEUTRAL; it only maps trusted Product facts and user input
+//   into the gateway's strict snake_case /recommend contract.
 //
 // Main functions:
-//   - GetAdvisorsAsync(token): fetches advisor metadata from the AI service.
-//   - StreamChatAsync(request, stream, token): sends the current V10.3-compatible
-//     product/chat payload and streams the AI response back to the frontend.
-//   - EnsureSuccessAsync(...): converts non-success AI responses into exceptions.
+//   - GetHealthAsync(): proxies /health.
+//   - GetAdvisorsAsync(): proxies /advisors.
+//   - RecommendAsync(): sends one product judgment to /recommend.
 //
 // Inputs:
-//   AiChatPayload containing advisor ID, selected products, and chat messages.
+//   AiRecommendationRequest from React and AiProductContext from the factual
+//   PriceWatch context service.
 //
 // Outputs:
-//   AdvisorDto list or streamed text from the AI backend.
+//   AiRecommendationResponse containing AI decision plus Python-rendered facts.
 // ============================================================================
 
 using System.Net.Http.Json;
@@ -35,6 +34,7 @@ public sealed class AiService : IAiService
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
 
@@ -48,13 +48,30 @@ public sealed class AiService : IAiService
     }
 
 
+    public async Task<AiHealthDto> GetHealthAsync(
+        CancellationToken cancellationToken
+    )
+    {
+        using var response = await _httpClient.GetAsync(
+            "health",
+            cancellationToken
+        );
+
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        return await response.Content.ReadFromJsonAsync<AiHealthDto>(
+            JsonOptions,
+            cancellationToken
+        ) ?? throw new HttpRequestException("AI health response was empty.");
+    }
+
+
     public async Task<IReadOnlyList<AdvisorDto>> GetAdvisorsAsync(
         CancellationToken cancellationToken
     )
     {
         using var response = await _httpClient.GetAsync(
             "advisors",
-            HttpCompletionOption.ResponseHeadersRead,
             cancellationToken
         );
 
@@ -70,91 +87,126 @@ public sealed class AiService : IAiService
     }
 
 
-    public async Task StreamChatAsync(
-        AiChatPayload request,
-        Stream outputStream,
+    public async Task<AiRecommendationResponse> RecommendAsync(
+        AiRecommendationRequest request,
+        AiProductContext product,
         CancellationToken cancellationToken
     )
     {
-        _logger.LogInformation(
-            "Sending AI request using advisor {AdvisorId} with {ProductCount} products and {MessageCount} messages",
-            request.AdvisorId,
-            request.Products.Count,
-            request.Messages.Count
-        );
+        if (product.CurrentPrice is not double currentPrice || currentPrice <= 0)
+        {
+            throw new ArgumentException(
+                "This product has no accepted current/history price for AI analysis."
+            );
+        }
 
-        // Keep the external AI request shape frozen for now. The new fields in
-        // AiProductContext can be wired in later together with the AI server/prompt.
         var payload = new
         {
             advisor_id = request.AdvisorId,
-
-            products = request.Products.Select(product => new
+            language = NormalizeLanguage(request.Language),
+            product = new
             {
                 product_id = product.ProductId,
                 name = product.Name,
                 currency = product.Currency,
-
-                current_price = product.CurrentPrice,
+                current_price = currentPrice,
+                price_status = product.PriceStatus,
                 target_price = product.TargetPrice,
-                previous_price = product.PreviousPrice,
-
                 historical_low = product.HistoricalLow,
-                historical_high = product.HistoricalHigh,
                 historical_average = product.HistoricalAverage,
-
                 history = product.History.Select(point => new
                 {
                     date = point.Date,
                     price = point.Price,
                 }),
-            }),
-
-            messages = request.Messages.Select(message => new
+                current_unit_price = product.CurrentUnitPrice,
+                target_unit_price = product.TargetUnitPrice,
+                last_purchase_price = product.LastPurchasePrice,
+                last_purchase_date = product.LastPurchaseDate?.ToString("yyyy-MM-dd"),
+            },
+            user_context = new
             {
-                role = message.Role,
-                content = message.Content,
-            }),
+                budget = request.UserContext.Budget,
+                urgency = NormalizeLevel(request.UserContext.Urgency),
+                replacement_need = NormalizeLevel(request.UserContext.ReplacementNeed),
+                price_sensitivity = NormalizeLevel(request.UserContext.PriceSensitivity),
+                owned_similar_products = request.UserContext.OwnedSimilarProducts
+                    .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+                    .Select(item => new
+                    {
+                        name = item.Name.Trim(),
+                        condition = NormalizeCondition(item.Condition),
+                        similarity = NormalizeSimilarity(item.Similarity),
+                    }),
+                notes = request.UserContext.Notes
+                    .Where(note => !string.IsNullOrWhiteSpace(note))
+                    .Select(note => note.Trim()),
+            },
         };
 
-        using var httpRequest = new HttpRequestMessage(
-            HttpMethod.Post,
-            "chat/stream"
-        )
-        {
-            Content = JsonContent.Create(payload),
-        };
+        _logger.LogInformation(
+            "Requesting V10.3 AI recommendation for product {ProductId} using advisor {AdvisorId} and price status {PriceStatus}",
+            product.ProductId,
+            request.AdvisorId,
+            product.PriceStatus
+        );
 
-        using var response = await _httpClient.SendAsync(
-            httpRequest,
-            HttpCompletionOption.ResponseHeadersRead,
+        using var response = await _httpClient.PostAsJsonAsync(
+            "recommend",
+            payload,
+            JsonOptions,
             cancellationToken
         );
 
         await EnsureSuccessAsync(response, cancellationToken);
 
-        await using var aiStream =
-            await response.Content.ReadAsStreamAsync(cancellationToken);
+        var result =
+            await response.Content.ReadFromJsonAsync<AiRecommendationResponse>(
+                JsonOptions,
+                cancellationToken
+            );
 
-        var buffer = new byte[4096];
+        return result
+            ?? throw new HttpRequestException("AI recommendation response was empty.");
+    }
 
-        while (true)
+
+    private static string NormalizeLevel(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized is "low" or "medium" or "high"
+            ? normalized
+            : "unknown";
+    }
+
+
+    private static string NormalizeLanguage(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized == "en" ? "en" : "zh";
+    }
+
+
+    private static string NormalizeCondition(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized switch
         {
-            var bytesRead = await aiStream.ReadAsync(
-                buffer.AsMemory(),
-                cancellationToken
-            );
+            "good" or "excellent" or "working" or "broken" or "unusable"
+                => normalized,
+            _ => "unknown",
+        };
+    }
 
-            if (bytesRead == 0)
-                break;
 
-            await outputStream.WriteAsync(
-                buffer.AsMemory(0, bytesRead),
-                cancellationToken
-            );
-
-            await outputStream.FlushAsync(cancellationToken);
-        }
+    private static string NormalizeSimilarity(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "high" or "very_high" => normalized,
+            _ => "unknown",
+        };
     }
 
 
@@ -166,17 +218,16 @@ public sealed class AiService : IAiService
         if (response.IsSuccessStatusCode)
             return;
 
-        var error =
-            await response.Content.ReadAsStringAsync(cancellationToken);
+        var error = await response.Content.ReadAsStringAsync(cancellationToken);
 
         _logger.LogError(
-            "Local AI returned {StatusCode}: {Error}",
+            "AI gateway returned {StatusCode}: {Error}",
             response.StatusCode,
             error
         );
 
         throw new HttpRequestException(
-            $"Local AI returned {(int)response.StatusCode}: {error}"
+            $"AI gateway returned {(int)response.StatusCode}: {error}"
         );
     }
 }

@@ -1,0 +1,43 @@
+{
+  "advisor_id": "balanced",
+  "language": "zh",
+  "product": {
+    "product_id": "sony-wh1000xm6",
+    "name": "Sony WH-1000XM6",
+    "currency": "SEK",
+    "current_price": 3990,
+    "price_status": "success",
+    "target_price": 3690,
+    "historical_low": 3490,
+    "historical_average": 4290,
+    "history": [
+      {"date": "2026-08-15", "price": 4490},
+      {"date": "2026-08-18", "price": 4390},
+      {"date": "2026-08-21", "price": 4290},
+      {"date": "2026-08-24", "price": 4190},
+      {"date": "2026-08-30", "price": 4090},
+      {"date": "2026-09-09", "price": 3990}
+    ],
+    "current_unit_price": null,
+    "target_unit_price": null,
+    "last_purchase_price": null,
+    "last_purchase_date": null
+  },
+  "user_context": {
+    "budget": 4500,
+    "urgency": "high",
+    "replacement_need": "high",
+    "price_sensitivity": "medium",
+    "owned_similar_products": [
+      {
+        "name": "Sony WH-1000XM5",
+        "condition": "broken",
+        "similarity": "high"
+      }
+    ],
+    "notes": [
+      "User has a long flight tomorrow.",
+      "The existing headphones are broken."
+    ]
+  }
+}
