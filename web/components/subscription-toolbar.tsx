@@ -18,22 +18,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export type ProductSort =
+export type SubscriptionSort =
   | "name"
   | "current-price"
   | "target-gap"
   | "last-checked";
 
-export function ProductToolbar({
+export function SubscriptionToolbar({
   search,
   onSearchChange,
   sort,
   onSortChange,
 }: {
   search: string;
-  onSearchChange: (value: string) => void;
-  sort: ProductSort;
-  onSortChange: (value: ProductSort) => void;
+  onSearchChange:
+    (value: string) => void;
+  sort: SubscriptionSort;
+  onSortChange:
+    (value: SubscriptionSort) => void;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm lg:flex-row lg:items-center">
@@ -43,34 +45,43 @@ export function ProductToolbar({
         <Input
           value={search}
           onChange={(event) =>
-            onSearchChange(event.target.value)
+            onSearchChange(
+              event.target.value
+            )
           }
-          placeholder="Search products or stores…"
+          placeholder="Search subscriptions or providers…"
           className="pl-9"
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
         <SlidersHorizontal className="hidden size-4 text-muted-foreground sm:block" />
 
         <Select
           value={sort}
           onValueChange={(value) =>
-            onSortChange(value as ProductSort)
+            onSortChange(
+              value as SubscriptionSort
+            )
           }
         >
-          <SelectTrigger className="w-[176px]">
+          <SelectTrigger className="w-[180px]">
             <SelectValue />
           </SelectTrigger>
 
           <SelectContent>
-            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="name">
+              Name
+            </SelectItem>
+
             <SelectItem value="current-price">
               Current price
             </SelectItem>
+
             <SelectItem value="target-gap">
               Target gap
             </SelectItem>
+
             <SelectItem value="last-checked">
               Last checked
             </SelectItem>
@@ -82,7 +93,7 @@ export function ProductToolbar({
           className={buttonVariants()}
         >
           <Plus className="size-4" />
-          Add product
+          Add subscription
         </Link>
       </div>
     </div>

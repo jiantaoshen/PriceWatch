@@ -79,53 +79,49 @@ export function ProductStatusNav({
   ];
 
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
-      <nav className="flex min-w-max items-stretch">
+    <div className="overflow-x-auto rounded-xl border bg-card p-1 shadow-sm">
+      <nav className="flex min-w-max items-center gap-1">
         {metrics.map((metric) => {
           const Icon = metric.icon;
-
-          const selected =
-            metric.key === activeFilter;
+          const selected = metric.key === activeFilter;
 
           return (
             <button
               key={metric.key}
               type="button"
-              onClick={() =>
-                onChange(metric.key)
-              }
+              onClick={() => onChange(metric.key)}
               className={cn(
-                "group flex min-w-[150px] items-center gap-3 border-r px-4 py-3 text-left transition-colors last:border-r-0",
+                "flex min-w-[142px] items-center justify-between gap-4 rounded-lg px-3.5 py-2.5 text-left transition-colors",
                 selected
-                  ? "bg-foreground text-background"
-                  : "hover:bg-muted/60"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-foreground hover:bg-muted/70"
               )}
             >
-              <Icon
-                className={cn(
-                  "size-4 shrink-0",
-                  selected
-                    ? "text-background"
-                    : "text-muted-foreground"
-                )}
-              />
-
-              <div className="flex min-w-0 items-baseline gap-2">
-                <span className="truncate text-sm font-medium">
-                  {metric.label}
-                </span>
-
-                <span
+              <span className="flex items-center gap-2">
+                <Icon
                   className={cn(
-                    "text-xs tabular-nums",
+                    "size-4 shrink-0",
                     selected
-                      ? "text-background/70"
+                      ? "text-background/80"
                       : "text-muted-foreground"
                   )}
-                >
-                  {metric.value}
+                />
+
+                <span className="text-sm font-medium">
+                  {metric.label}
                 </span>
-              </div>
+              </span>
+
+              <span
+                className={cn(
+                  "rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums",
+                  selected
+                    ? "bg-background/15 text-background"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {metric.value}
+              </span>
             </button>
           );
         })}

@@ -124,6 +124,11 @@ export type PendingReview = {
   suspiciousReason: string | null;
   error: string | null;
   createdAt: string;
+
+  // Recommended additions to ReviewsController output.
+  // Optional so the page still works before that API patch.
+  currency?: string;
+  unit?: string | null;
 };
 
 export type ProductFilter =

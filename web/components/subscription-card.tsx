@@ -6,13 +6,15 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarDays,
-  CircleDollarSign,
-  Pause,
+  CreditCard,
   RotateCcw,
-  Store,
   Target,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  useState,
+} from "react";
+import { useAuth } from "@/components/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import {
   Button,
@@ -24,6 +26,7 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
+import { apiFetch } from "@/lib/api";
 import {
   formatDate,
   formatMoney,
@@ -33,18 +36,25 @@ import {
 import type { ItemListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function ProductCard({
+export function SubscriptionCard({
   item,
-  onRestore,
-  restoring = false,
+  onRestored,
 }: {
   item: ItemListItem;
-  onRestore?: (id: string) => Promise<void> | void;
-  restoring?: boolean;
+  onRestored?: () => void;
 }) {
-  const archived = Boolean(item.archivedAt);
-  const hasCurrent = item.currentUnitPrice !== null;
-  const hasTarget = item.targetUnitPrice !== null;
+  const {
+    getAccessToken,
+  } = useAuth();
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const hasCurrent =
+    item.currentUnitPrice !== null;
+
+  const hasTarget =
+    item.targetUnitPrice !== null;
 
   const targetDifference =
     formatRelativeDifference(
@@ -56,36 +66,40 @@ export function ProductCard({
   const previousDifference =
     item.currentUnitPrice !== null &&
     item.previousUnitPrice !== null
-      ? item.currentUnitPrice - item.previousUnitPrice
+      ? item.currentUnitPrice -
+        item.previousUnitPrice
       : null;
 
-  const previousPercent =
-    previousDifference !== null &&
-    item.previousUnitPrice !== null &&
-    item.previousUnitPrice !== 0
-      ? (previousDifference / item.previousUnitPrice) * 100
-      : null;
+  async function restore() {
+    setBusy(true);
+
+    try {
+      const token =
+        await getAccessToken();
+
+      await apiFetch<void>(
+        `/api/items/${item.id}/restore`,
+        token.accessToken,
+        {
+          method: "POST",
+        }
+      );
+
+      onRestored?.();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Card
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        archived &&
-          "border-dashed bg-muted/15 hover:translate-y-0"
+        "group flex h-full flex-col overflow-hidden transition-shadow hover:shadow-md",
+        item.archivedAt &&
+          "border-dashed bg-muted/20"
       )}
     >
-      <div
-        className={cn(
-          "absolute inset-x-0 top-0 h-1",
-          archived
-            ? "bg-muted-foreground/20"
-            : item.belowTarget
-              ? "bg-emerald-500/75"
-              : "bg-border"
-        )}
-      />
-
-      <CardHeader className="space-y-3 pb-4 pt-6">
+      <CardHeader className="space-y-4 pb-4">
         <div className="flex min-w-0 items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="line-clamp-2 min-h-12 text-base font-semibold leading-6 tracking-tight">
@@ -94,34 +108,41 @@ export function ProductCard({
 
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <Store className="size-3.5" />
-                {item.sourceCount}{" "}
-                {item.sourceCount === 1
-                  ? "store"
-                  : "stores"}
+                <CreditCard className="size-3.5" />
+
+                {item.currentStore
+                  ? item.currentStore
+                  : `${item.sourceCount} ${
+                      item.sourceCount === 1
+                        ? "provider"
+                        : "providers"
+                    }`}
               </span>
 
-              <span>{item.updateMode}</span>
+              <span>
+                {item.updateMode}
+              </span>
 
-              {!item.trackingEnabled && !archived && (
-                <span className="inline-flex items-center gap-1">
-                  <Pause className="size-3" />
-                  Tracking off
-                </span>
-              )}
+              {!item.trackingEnabled &&
+                !item.archivedAt && (
+                  <span>
+                    Tracking off
+                  </span>
+                )}
             </div>
           </div>
 
-          {archived ? (
+          {item.archivedAt ? (
             <Badge variant="secondary">
               <Archive className="mr-1 size-3" />
               Archived
             </Badge>
           ) : item.belowTarget ? (
-            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-500">
+            <Badge>
               Below target
             </Badge>
-          ) : hasTarget && hasCurrent ? (
+          ) : hasTarget &&
+            hasCurrent ? (
             <Badge variant="outline">
               Above target
             </Badge>
@@ -135,20 +156,15 @@ export function ProductCard({
 
       <CardContent className="flex flex-1 flex-col gap-5">
         <div>
-          <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            {archived
-              ? "Last known unit price"
-              : "Current unit price"}
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {item.archivedAt
+              ? "Last known price"
+              : "Current price"}
           </div>
 
           {hasCurrent ? (
             <div className="mt-1.5">
-              <div
-                className={cn(
-                  "text-3xl font-semibold tracking-tight tabular-nums",
-                  archived && "text-muted-foreground"
-                )}
-              >
+              <div className="text-3xl font-semibold tracking-tight tabular-nums">
                 {formatUnitPrice(
                   item.currentUnitPrice,
                   item.currency,
@@ -156,22 +172,14 @@ export function ProductCard({
                 )}
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                {item.currentStore && (
-                  <span>
-                    {archived ? "Last best at" : "Best at"}{" "}
-                    <span className="font-medium text-foreground">
-                      {item.currentStore}
-                    </span>
+              {item.currentStore && (
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Provider{" "}
+                  <span className="font-medium text-foreground">
+                    {item.currentStore}
                   </span>
-                )}
-
-                {!archived && targetDifference && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                    {targetDifference}
-                  </span>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="mt-1.5">
@@ -180,14 +188,14 @@ export function ProductCard({
               </div>
 
               <div className="mt-2 text-sm text-muted-foreground">
-                Waiting for a manual or scraped price.
+                Add a manual price or wait for a valid automatic update.
               </div>
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border bg-background/70 p-3">
+          <div className="rounded-lg border bg-muted/30 p-3">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Target className="size-3.5" />
               Target
@@ -200,9 +208,15 @@ export function ProductCard({
                 item.unit
               )}
             </div>
+
+            {targetDifference && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                {targetDifference}
+              </div>
+            )}
           </div>
 
-          <div className="rounded-xl border bg-background/70 p-3">
+          <div className="rounded-lg border bg-muted/30 p-3">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               {previousDifference !== null &&
               previousDifference < 0 ? (
@@ -211,8 +225,9 @@ export function ProductCard({
                 previousDifference > 0 ? (
                 <ArrowUpRight className="size-3.5" />
               ) : (
-                <CircleDollarSign className="size-3.5" />
+                <CreditCard className="size-3.5" />
               )}
+
               Previous
             </div>
 
@@ -224,21 +239,18 @@ export function ProductCard({
               )}
             </div>
 
-            {previousPercent !== null && (
-              <div
-                className={cn(
-                  "mt-1 text-xs font-medium tabular-nums",
-                  previousPercent < 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : previousPercent > 0
-                      ? "text-amber-700 dark:text-amber-400"
-                      : "text-muted-foreground"
-                )}
-              >
-                {previousPercent > 0 ? "+" : ""}
-                {previousPercent.toFixed(1)}%
-              </div>
-            )}
+            <div className="mt-1 text-xs text-muted-foreground">
+              {previousDifference === null
+                ? "No previous price"
+                : previousDifference === 0
+                  ? "No change"
+                  : `${previousDifference < 0 ? "↓" : "↑"} ${formatMoney(
+                      Math.abs(
+                        previousDifference
+                      ),
+                      item.currency
+                    )}`}
+            </div>
           </div>
         </div>
 
@@ -246,7 +258,7 @@ export function ProductCard({
           <div className="flex items-center justify-between gap-3">
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays className="size-3.5" />
-              Last purchase
+              Last payment
             </span>
 
             <span className="text-right tabular-nums">
@@ -267,34 +279,40 @@ export function ProductCard({
 
           <div className="flex items-center justify-between gap-3">
             <span>
-              {archived ? "Archived" : "Last checked"}
+              {item.archivedAt
+                ? "Archived"
+                : "Last checked"}
             </span>
 
             <span>
               {formatDate(
-                archived
-                  ? item.archivedAt
-                  : item.lastCheckedAt
+                item.archivedAt ??
+                  item.lastCheckedAt
               )}
             </span>
           </div>
         </div>
       </CardContent>
 
-      <CardFooter className="flex items-center justify-between gap-2 border-t bg-muted/10 px-4 py-3">
-        {archived && onRestore ? (
+      <CardFooter className="flex items-center justify-between gap-2 border-t bg-muted/15 px-6 py-3">
+        {item.archivedAt ? (
           <Button
-            type="button"
             variant="outline"
             size="sm"
-            disabled={restoring}
-            onClick={() => onRestore(item.id)}
+            disabled={busy}
+            onClick={() => {
+              restore().catch(
+                console.error
+              );
+            }}
           >
             <RotateCcw className="size-4" />
-            {restoring ? "Restoring…" : "Restore"}
+            {busy
+              ? "Restoring…"
+              : "Restore"}
           </Button>
         ) : (
-          <div />
+          <span />
         )}
 
         <Link
