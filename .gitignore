@@ -199,3 +199,18 @@ temp/
 # ------------------------------------------------------------
 *.7z
 *.rar
+
+# Private UI
+private-web/node_modules/
+private-web/.next/
+private-web/.env.local
+
+# Python
+.venv/
+scraper/__pycache__/
+scraper/**/__pycache__/
+scraper/**/*.pyc
+
+# Local private runtime
+**/PriceWatch/Private/debug/
+
