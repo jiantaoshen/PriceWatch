@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "description": "Converted from legacy data/products.json for the current PriceWatch WebApi test import.",
+  "items": [
+    {
+      "legacyId": "0d3919eb71a64921",
+      "itemType": "Product",
+      "name": "Inet System G50 R5/5070 Ti",
+      "currency": "SEK",
+      "unit": null,
+      "targetPrice": 17990,
+      "comparisonQuantity": 1,
+      "lastPurchasePrice": 24999,
+      "lastPurchaseDate": "2026-09-11",
+      "updateMode": "Automatic",
+      "checkIntervalMinutes": null,
+      "trackingEnabled": true,
+      "sources": [
+        {
+          "store": "Inet",
+          "url": "https://www.inet.se/produkt/d100129/inet-system-g50-9600x-5070-ti",
+          "scrapingEnabled": true,
+          "defaultQuantity": 1,
+          "manualPrice": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "legacyId": "2eb30e77766b4bfb",
+      "itemType": "Product",
+      "name": "ACO Spotless Skin Clarifying Face & Body Cleanser 200 ml",
+      "currency": "SEK",
+      "unit": null,
+      "targetPrice": 100,
+      "comparisonQuantity": 1,
+      "lastPurchasePrice": null,
+      "lastPurchaseDate": null,
+      "updateMode": "Automatic",
+      "checkIntervalMinutes": null,
+      "trackingEnabled": true,
+      "sources": [
+        {
+          "store": "Apotea",
+          "url": "https://www.apotea.se/aco-spotless-skin-clarifying-face-body-cleanser-200-ml",
+          "scrapingEnabled": true,
+          "defaultQuantity": 1,
+          "manualPrice": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "legacyId": "11c1e288557248cd",
+      "itemType": "Product",
+      "name": "Flux Original Coolmint XL 1000 ml",
+      "currency": "SEK",
+      "unit": null,
+      "targetPrice": 79,
+      "comparisonQuantity": 1,
+      "lastPurchasePrice": null,
+      "lastPurchaseDate": null,
+      "updateMode": "Automatic",
+      "checkIntervalMinutes": null,
+      "trackingEnabled": true,
+      "sources": [
+        {
+          "store": "Apotea",
+          "url": "https://www.apotea.se/flux-original-coolmint-xl-1000-ml",
+          "scrapingEnabled": true,
+          "defaultQuantity": 1,
+          "manualPrice": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "legacyId": "d4fd48e394c64a3d",
+      "itemType": "Product",
+      "name": "Webhallen-Config-Core-R5-7500F-RTX-5060Ti-16GB-16GB-1TB-Win-11",
+      "currency": "SEK",
+      "unit": null,
+      "targetPrice": 12990,
+      "comparisonQuantity": 1,
+      "lastPurchasePrice": null,
+      "lastPurchaseDate": null,
+      "updateMode": "Automatic",
+      "checkIntervalMinutes": null,
+      "trackingEnabled": true,
+      "sources": [
+        {
+          "store": "Webhallen",
+          "url": "https://www.webhallen.com/se/product/398252-Webhallen-Config-Core-R5-7500F-RTX-5060Ti-16GB-16GB-1TB-Win-11",
+          "scrapingEnabled": true,
+          "defaultQuantity": 1,
+          "manualPrice": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "legacyId": "560b87eee8a441d7",
+      "itemType": "Product",
+      "name": "Finish Diskmaskinrengöring Lemon 250 ml",
+      "currency": "SEK",
+      "unit": "pcs",
+      "targetPrice": 50,
+      "comparisonQuantity": 2,
+      "lastPurchasePrice": null,
+      "lastPurchaseDate": null,
+      "updateMode": "Hybrid",
+      "checkIntervalMinutes": null,
+      "trackingEnabled": true,
+      "sources": [
+        {
+          "store": "Apotea",
+          "url": "https://www.apotea.se/finish-maskinrengoring-diskmaskin-lemon-250ml-duo-pack",
+          "scrapingEnabled": true,
+          "defaultQuantity": 2,
+          "manualPrice": null,
+          "note": null
+        },
+        {
+          "store": "Amazon",
+          "url": "https://www.amazon.se/Finish-382399-Diskmaskinsreng%C3%B6ring-Citron-250ml/dp/B08KYXNCSY?crid=TKIYM772F4KQ&dib=eyJ2IjoiMSJ9.3oEHXZ9lTgsP8_fNroi8yAPQt2yQSuFca1h7Ux9gRpqaz6uaoMxTA_gFTAgZVWUJGIrD4SHfNKA67yepqNj102rbXgQtme1pu-Z37SoOurpTXzc3ECsDCVjjY37bPoVPtafIsxnHPsK2jIxLttJVoQ5pdlme5nycEDbn7Olez2I7d118CKGIB1XEyGLHUswracUQXP1K-WESfrvObtIlm-xquzc77YoiLIzCnR2PyYOIPZlnvtvJaHPbaPtAbVaYOHuLOQTrL2qk1IbLvk6Ln9QtXCHqf_3WJiY5dGnrrdc.oJKTN5uHPhGmaMildeC_3OS5s6JQANj0gg96YJxInX0&dib_tag=se&keywords=Finish+Diskmaskinreng%C3%B6ring+Lemon+250+ml&qid=1788623077&sprefix=finish+diskmaskinreng%C3%B6ring+lemon+250+ml%2Caps%2C114&sr=8-1",
+          "scrapingEnabled": false,
+          "defaultQuantity": 1,
+          "manualPrice": 26.95,
+          "note": null
+        }
+      ]
+    },
+    {
+      "legacyId": "ae189920285f4431",
+      "itemType": "Product",
+      "name": "Fiberkudde 50x60 Hoie DOWNLIKE ECO",
+      "currency": "SEK",
+      "unit": null,
+      "targetPrice": 320,
+      "comparisonQuantity": 1,
+      "lastPurchasePrice": null,
+      "lastPurchaseDate": null,
+      "updateMode": "Automatic",
+      "checkIntervalMinutes": null,
+      "trackingEnabled": true,
+      "sources": [
+        {
+          "store": "JYSK",
+          "url": "https://jysk.se/sovrum/kuddar/fiberkuddar/fiberkudde-50x60-hoie-downlike-eco?search_category=auto_suggestion&query=hoie#fromSearch",
+          "scrapingEnabled": true,
+          "defaultQuantity": 1,
+          "manualPrice": null,
+          "note": null
+        }
+      ]
+    }
+  ]
+}

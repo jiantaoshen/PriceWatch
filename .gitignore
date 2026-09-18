@@ -1,0 +1,201 @@
+# ============================================================
+# PriceWatch
+# .NET + Next.js + Python + local/private scraper data
+# ============================================================
+
+# ------------------------------------------------------------
+# OS / editors
+# ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+.vs/
+.idea/
+.vscode/
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ------------------------------------------------------------
+# .NET / Visual Studio
+# ------------------------------------------------------------
+**/bin/
+**/obj/
+**/[Dd]ebug/
+**/[Rr]elease/
+**/x64/
+**/x86/
+**/[Aa][Rr][Mm]/
+**/[Aa][Rr][Mm]64/
+
+TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# Local publish/build output
+publish/
+artifacts/
+
+# ------------------------------------------------------------
+# ASP.NET / local configuration
+# ------------------------------------------------------------
+appsettings.Development.json
+appsettings.Local.json
+**/appsettings.Development.json
+**/appsettings.Local.json
+
+# User-secrets are stored outside the repo by dotnet,
+# but ignore accidental local secret exports anyway.
+secrets.json
+**/secrets.json
+
+# ------------------------------------------------------------
+# Node / Next.js
+# ------------------------------------------------------------
+node_modules/
+**/node_modules/
+
+.next/
+**/.next/
+
+out/
+**/out/
+
+dist/
+**/dist/
+
+build/
+**/build/
+
+.turbo/
+**/.turbo/
+
+.vercel/
+**/.vercel/
+
+coverage/
+**/coverage/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------
+# Environment files / secrets
+# ------------------------------------------------------------
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Allow committed templates/examples
+!.env.example
+!**/.env.example
+
+# ------------------------------------------------------------
+# TypeScript / Next.js local files
+# ------------------------------------------------------------
+*.tsbuildinfo
+next-env.d.ts
+
+# ------------------------------------------------------------
+# Python
+# ------------------------------------------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+venv/
+env/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Python packaging
+*.egg-info/
+.eggs/
+wheelhouse/
+
+# ------------------------------------------------------------
+# Browser / scraper local-private state
+# ------------------------------------------------------------
+chrome-profile/
+chrome_profiles/
+browser-profile/
+browser_profiles/
+user-data-dir/
+playwright/.auth/
+.playwright/
+
+# Local scraper runtime/output
+scraper/output/
+scraper/logs/
+scraper/tmp/
+scraper/temp/
+
+# ------------------------------------------------------------
+# Legacy/private PriceWatch data
+# ------------------------------------------------------------
+# Old local dataset and import archives should not be committed.
+data/
+data.zip
+data*.zip
+*.bak
+
+# Local import/export artifacts
+migration_output/
+migration_tmp/
+import_tmp/
+export_tmp/
+
+# ------------------------------------------------------------
+# Databases / local files
+# ------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ------------------------------------------------------------
+# Logs / temp files
+# ------------------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# ------------------------------------------------------------
+# Certificates / keys
+# ------------------------------------------------------------
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+
+# ------------------------------------------------------------
+# Misc local archives
+# ------------------------------------------------------------
+*.7z
+*.rar

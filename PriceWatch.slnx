@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PriceWatch.Core/PriceWatch.Core.csproj" />
+    <Project Path="src/PriceWatch.Data/PriceWatch.Data.csproj" />
+    <Project Path="src/PriceWatch.Private/PriceWatch.Private.csproj" />
+    <Project Path="src/PriceWatch.WebApi/PriceWatch.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/PriceWatch.Migrator/PriceWatch.Migrator.csproj" />
+  </Folder>
+</Solution>
