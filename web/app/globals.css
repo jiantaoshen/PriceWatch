@@ -2,129 +2,240 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
+/* =========================================
+   PriceWatch — shared brand theme
+   ========================================= */
 
 :root {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+
+  /* Brand */
+  --brand-dark: #182033;
+  --brand-role: #7196c9;
+  --brand-soft: #dce8f5;
+  --brand-light: #fafbfd;
+  --brand-white: #ffffff;
+
+  --brand-slate: #5f6c84;
+  --brand-slate-muted: #cbd5e1;
+
+  /* Semantic */
+  --background: var(--brand-white);
+  --foreground: var(--brand-dark);
+
+  --card: var(--brand-white);
+  --card-foreground: var(--brand-dark);
+
+  --popover: var(--brand-white);
+  --popover-foreground: var(--brand-dark);
+
+  --primary: var(--brand-role);
+  --primary-foreground: var(--brand-white);
+
+  --secondary: var(--brand-soft);
+  --secondary-foreground: var(--brand-dark);
+
+  --muted: var(--brand-light);
+  --muted-foreground: var(--brand-slate);
+
+  --accent: var(--brand-soft);
+  --accent-foreground: var(--brand-dark);
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --border: #dce8f5;
+  --input: #dce8f5;
+  --ring: var(--brand-role);
+
+  /* Charts */
+  --chart-1: #7196c9;
+  --chart-2: #5279ad;
+  --chart-3: #94afd3;
+  --chart-4: #385b8a;
+  --chart-5: #b9cce4;
+
+  /* Sidebar, if used later */
+  --sidebar: #fafbfd;
+  --sidebar-foreground: #182033;
+  --sidebar-primary: #7196c9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #dce8f5;
+  --sidebar-accent-foreground: #182033;
+  --sidebar-border: #dce8f5;
+  --sidebar-ring: #7196c9;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+
+/* =========================================
+   Tailwind semantic mapping
+   ========================================= */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
+
+
+/* =========================================
+   Base
+   ========================================= */
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+
   html {
-    @apply font-sans;
+    @apply bg-background;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  select {
+    @apply cursor-pointer;
+  }
+
+  ::selection {
+    @apply bg-primary text-primary-foreground;
+  }
+}
+
+
+/* =========================================
+   PriceWatch shared UI
+   ========================================= */
+
+@layer components {
+
+  /*
+   * Small tag used for:
+   * store / mode / status / unit / type
+   */
+  .pw-tag {
+    @apply inline-flex
+      h-5
+      items-center
+      justify-center
+      whitespace-nowrap
+      rounded-md
+      border
+      border-primary/15
+      bg-secondary
+      px-1.5
+      text-[11px]
+      leading-none
+      font-semibold
+      text-secondary-foreground;
+  }
+
+  .pw-tag-muted {
+    @apply border-border
+      bg-muted
+      text-muted-foreground;
+  }
+
+  .pw-tag-primary {
+    @apply border-primary/20
+      bg-primary/10
+      text-primary;
+  }
+
+  .pw-tag-danger {
+    @apply border-destructive/15
+      bg-destructive/10
+      text-destructive;
+  }
+
+
+  /*
+   * Common compact form treatment
+   */
+  .pw-field {
+    @apply h-9
+      rounded-md
+      border-border
+      bg-background
+      px-3
+      text-sm
+      shadow-none
+      transition-colors
+      placeholder:text-muted-foreground
+      focus-visible:border-primary
+      focus-visible:ring-2
+      focus-visible:ring-primary/15;
+  }
+
+
+  /*
+   * Section label
+   */
+  .pw-label {
+    @apply text-xs
+      font-semibold
+      uppercase
+      tracking-widest
+      text-muted-foreground;
+  }
+
+
+  /*
+   * Subtle panel / card
+   */
+  .pw-panel {
+    @apply rounded-lg
+      border
+      border-border
+      bg-card
+      shadow-none;
   }
 }
