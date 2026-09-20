@@ -133,7 +133,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
-                builder.Configuration["Frontend:Origin"] ?? "http://localhost:3000",
+                "http://localhost:3000",
                 "https://pricewatch.jiantao.dev"
             )
             .AllowAnyHeader()
