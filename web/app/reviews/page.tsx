@@ -13,6 +13,7 @@ import {
   useState,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { EmptyState } from "@/components/empty-state";
 import { WorkspacePage } from "@/components/workspace-page";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -174,12 +175,14 @@ export default function ReviewsPage() {
               Loading reviews…
             </div>
           ) : !account ? (
-            <EmptyReviews
+            <EmptyState
+              icon={Check}
               title="Sign in to view reviews"
               description="Use the Login button in the top-right corner."
             />
           ) : reviews.length === 0 ? (
-            <EmptyReviews
+            <EmptyState
+              icon={Check}
               title="Nothing needs review"
               description="Suspicious scrape results will appear here."
             />
@@ -359,8 +362,8 @@ function ReviewCard({
               <div
                 className={
                   currentDifference < 0
-                    ? "text-sm font-medium text-emerald-600 dark:text-emerald-400"
-                    : "text-sm font-medium text-amber-700 dark:text-amber-400"
+                    ? "text-sm font-medium text-success"
+                    : "text-sm font-medium text-warning"
                 }
               >
                 {currentDifference > 0 ? "+" : ""}
@@ -601,26 +604,3 @@ function ReviewMetric({
   );
 }
 
-function EmptyReviews({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed bg-background px-6 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-        <Check className="size-5 text-muted-foreground" />
-      </div>
-
-      <h2 className="mt-4 text-base font-semibold">
-        {title}
-      </h2>
-
-      <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}

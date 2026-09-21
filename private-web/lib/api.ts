@@ -11,6 +11,10 @@ export class ApiError extends Error {
   }
 }
 
+export function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function apiFetch<T>(
   path: string,
   init?: RequestInit

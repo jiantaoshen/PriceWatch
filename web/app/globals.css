@@ -12,12 +12,12 @@
   /* Brand */
   --brand-dark: #182033;
   --brand-role: #7196c9;
+  --brand-role-strong: #5576a3;
   --brand-soft: #dce8f5;
   --brand-light: #fafbfd;
   --brand-white: #ffffff;
 
   --brand-slate: #5f6c84;
-  --brand-slate-muted: #cbd5e1;
 
   /* Semantic */
   --background: var(--brand-white);
@@ -29,7 +29,7 @@
   --popover: var(--brand-white);
   --popover-foreground: var(--brand-dark);
 
-  --primary: var(--brand-role);
+  --primary: var(--brand-role-strong);
   --primary-foreground: var(--brand-white);
 
   --secondary: var(--brand-soft);
@@ -42,28 +42,34 @@
   --accent-foreground: var(--brand-dark);
 
   --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
+  --destructive-foreground: var(--brand-white);
+
+  --success: #15803d;
+  --success-foreground: var(--brand-white);
+
+  --warning: #a16207;
+  --warning-foreground: var(--brand-white);
 
   --border: #dce8f5;
-  --input: #dce8f5;
-  --ring: var(--brand-role);
+  --input: var(--border);
+  --ring: var(--brand-role-strong);
 
   /* Charts */
-  --chart-1: #7196c9;
+  --chart-1: var(--brand-role);
   --chart-2: #5279ad;
   --chart-3: #94afd3;
   --chart-4: #385b8a;
   --chart-5: #b9cce4;
 
   /* Sidebar, if used later */
-  --sidebar: #fafbfd;
-  --sidebar-foreground: #182033;
-  --sidebar-primary: #7196c9;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #dce8f5;
-  --sidebar-accent-foreground: #182033;
-  --sidebar-border: #dce8f5;
-  --sidebar-ring: #7196c9;
+  --sidebar: var(--brand-light);
+  --sidebar-foreground: var(--brand-dark);
+  --sidebar-primary: var(--brand-role-strong);
+  --sidebar-primary-foreground: var(--brand-white);
+  --sidebar-accent: var(--brand-soft);
+  --sidebar-accent-foreground: var(--brand-dark);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--brand-role-strong);
 }
 
 
@@ -100,6 +106,12 @@
 
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
 
   --color-border: var(--border);
   --color-input: var(--input);
@@ -147,95 +159,5 @@
 
   ::selection {
     @apply bg-primary text-primary-foreground;
-  }
-}
-
-
-/* =========================================
-   PriceWatch shared UI
-   ========================================= */
-
-@layer components {
-
-  /*
-   * Small tag used for:
-   * store / mode / status / unit / type
-   */
-  .pw-tag {
-    @apply inline-flex
-      h-5
-      items-center
-      justify-center
-      whitespace-nowrap
-      rounded-md
-      border
-      border-primary/15
-      bg-secondary
-      px-1.5
-      text-[11px]
-      leading-none
-      font-semibold
-      text-secondary-foreground;
-  }
-
-  .pw-tag-muted {
-    @apply border-border
-      bg-muted
-      text-muted-foreground;
-  }
-
-  .pw-tag-primary {
-    @apply border-primary/20
-      bg-primary/10
-      text-primary;
-  }
-
-  .pw-tag-danger {
-    @apply border-destructive/15
-      bg-destructive/10
-      text-destructive;
-  }
-
-
-  /*
-   * Common compact form treatment
-   */
-  .pw-field {
-    @apply h-9
-      rounded-md
-      border-border
-      bg-background
-      px-3
-      text-sm
-      shadow-none
-      transition-colors
-      placeholder:text-muted-foreground
-      focus-visible:border-primary
-      focus-visible:ring-2
-      focus-visible:ring-primary/15;
-  }
-
-
-  /*
-   * Section label
-   */
-  .pw-label {
-    @apply text-xs
-      font-semibold
-      uppercase
-      tracking-widest
-      text-muted-foreground;
-  }
-
-
-  /*
-   * Subtle panel / card
-   */
-  .pw-panel {
-    @apply rounded-lg
-      border
-      border-border
-      bg-card
-      shadow-none;
   }
 }

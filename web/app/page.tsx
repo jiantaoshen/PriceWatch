@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { EmptyState } from "@/components/empty-state";
 import { ProductCard } from "@/components/product-card";
 import { ProductStatusNav } from "@/components/product-status-nav";
 import {
@@ -19,6 +20,15 @@ import {
 import { ProductsSkeleton } from "@/components/products-skeleton";
 import { WorkspacePage } from "@/components/workspace-page";
 import { ApiError, apiFetch } from "@/lib/api";
+import {
+  hasPriceDrop,
+  hasPriceIncrease,
+  isActiveItem,
+  isArchivedItem,
+  isBelowTarget,
+  matchesItemSearch,
+  sortItems,
+} from "@/lib/item-list";
 import type {
   ItemListItem,
   PendingReview,
@@ -147,40 +157,18 @@ export default function HomePage() {
     [items]
   );
 
-  const activeProducts = products.filter(
-    (item) => !item.archivedAt
-  );
+  const activeProducts = products.filter(isActiveItem);
 
-  const archivedProducts = products.filter(
-    (item) => Boolean(item.archivedAt)
-  );
+  const archivedProducts = products.filter(isArchivedItem);
 
   const belowTargetProducts =
-    activeProducts.filter(
-      (item) =>
-        item.currentUnitPrice !== null &&
-        item.targetUnitPrice !== null &&
-        item.currentUnitPrice <=
-          item.targetUnitPrice
-    );
+    activeProducts.filter(isBelowTarget);
 
   const droppedProducts =
-    activeProducts.filter(
-      (item) =>
-        item.currentUnitPrice !== null &&
-        item.previousUnitPrice !== null &&
-        item.currentUnitPrice <
-          item.previousUnitPrice
-    );
+    activeProducts.filter(hasPriceDrop);
 
   const increasedProducts =
-    activeProducts.filter(
-      (item) =>
-        item.currentUnitPrice !== null &&
-        item.previousUnitPrice !== null &&
-        item.currentUnitPrice >
-          item.previousUnitPrice
-    );
+    activeProducts.filter(hasPriceIncrease);
 
   const pendingProductIds = new Set(
     pendingReviews.map(
@@ -207,45 +195,11 @@ export default function HomePage() {
                 ? increasedProducts
                 : activeProducts;
 
-    const query = search.trim().toLowerCase();
+    result = result.filter((item) =>
+      matchesItemSearch(item, search)
+    );
 
-    if (query) {
-      result = result.filter(
-        (item) =>
-          item.name
-            .toLowerCase()
-            .includes(query) ||
-          item.currentStore
-            ?.toLowerCase()
-            .includes(query)
-      );
-    }
-
-    return [...result].sort((a, b) => {
-      switch (sort) {
-        case "current-price":
-          return compareNullableNumbers(
-            a.currentUnitPrice,
-            b.currentUnitPrice
-          );
-
-        case "target-gap":
-          return compareNullableNumbers(
-            targetGap(a),
-            targetGap(b)
-          );
-
-        case "last-checked":
-          return compareNullableDates(
-            b.lastCheckedAt,
-            a.lastCheckedAt
-          );
-
-        case "name":
-        default:
-          return a.name.localeCompare(b.name);
-      }
-    });
+    return sortItems(result, sort);
   }, [
     filter,
     search,
@@ -315,22 +269,26 @@ export default function HomePage() {
           {!ready || loading ? (
             <ProductsSkeleton />
           ) : !account ? (
-            <EmptyProducts
+            <EmptyState
+              icon={PackageOpen}
               title="Sign in to view PriceWatch"
               description="Use the Login button in the top-right corner."
             />
           ) : forbidden ? (
-            <EmptyProducts
+            <EmptyState
+              icon={PackageOpen}
               title="No data available"
               description="This Microsoft account does not have access to the PriceWatch data."
             />
           ) : error ? (
-            <EmptyProducts
+            <EmptyState
+              icon={PackageOpen}
               title="Could not load products"
               description={error}
             />
           ) : filteredProducts.length === 0 ? (
-            <EmptyProducts
+            <EmptyState
+              icon={PackageOpen}
               title={
                 filter === "archived"
                   ? "No archived products"
@@ -364,63 +322,3 @@ export default function HomePage() {
   );
 }
 
-function EmptyProducts({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed bg-background px-6 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-        <PackageOpen className="size-5 text-muted-foreground" />
-      </div>
-
-      <h2 className="mt-4 text-base font-semibold">
-        {title}
-      </h2>
-
-      <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function targetGap(item: ItemListItem) {
-  if (
-    item.currentUnitPrice === null ||
-    item.targetUnitPrice === null
-  ) {
-    return null;
-  }
-
-  return (
-    item.currentUnitPrice - item.targetUnitPrice
-  );
-}
-
-function compareNullableNumbers(
-  a: number | null,
-  b: number | null
-) {
-  if (a === null && b === null) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return a - b;
-}
-
-function compareNullableDates(
-  a: string | null,
-  b: string | null
-) {
-  if (!a && !b) return 0;
-  if (!a) return 1;
-  if (!b) return -1;
-
-  return (
-    new Date(a).getTime() -
-    new Date(b).getTime()
-  );
-}

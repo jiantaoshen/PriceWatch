@@ -9,6 +9,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { EmptyState } from "@/components/empty-state";
 import { WorkspacePage } from "@/components/workspace-page";
 import { SubscriptionCard } from "@/components/subscription-card";
 import {
@@ -21,6 +22,15 @@ import {
 } from "@/components/subscription-toolbar";
 import { ProductsSkeleton } from "@/components/products-skeleton";
 import { ApiError, apiFetch } from "@/lib/api";
+import {
+  hasPriceDrop,
+  hasPriceIncrease,
+  isActiveItem,
+  isArchivedItem,
+  isBelowTarget,
+  matchesItemSearch,
+  sortItems,
+} from "@/lib/item-list";
 import type {
   ItemListItem,
 } from "@/lib/types";
@@ -118,48 +128,19 @@ export default function SubscriptionsPage() {
     );
 
   const activeSubscriptions =
-    subscriptions.filter(
-      (item) => !item.archivedAt
-    );
+    subscriptions.filter(isActiveItem);
 
   const archivedSubscriptions =
-    subscriptions.filter(
-      (item) =>
-        Boolean(item.archivedAt)
-    );
+    subscriptions.filter(isArchivedItem);
 
   const belowTargetSubscriptions =
-    activeSubscriptions.filter(
-      (item) =>
-        item.currentUnitPrice !==
-          null &&
-        item.targetUnitPrice !==
-          null &&
-        item.currentUnitPrice <=
-          item.targetUnitPrice
-    );
+    activeSubscriptions.filter(isBelowTarget);
 
   const droppedSubscriptions =
-    activeSubscriptions.filter(
-      (item) =>
-        item.currentUnitPrice !==
-          null &&
-        item.previousUnitPrice !==
-          null &&
-        item.currentUnitPrice <
-          item.previousUnitPrice
-    );
+    activeSubscriptions.filter(hasPriceDrop);
 
   const increasedSubscriptions =
-    activeSubscriptions.filter(
-      (item) =>
-        item.currentUnitPrice !==
-          null &&
-        item.previousUnitPrice !==
-          null &&
-        item.currentUnitPrice >
-          item.previousUnitPrice
-    );
+    activeSubscriptions.filter(hasPriceIncrease);
 
   const noPriceSubscriptions =
     activeSubscriptions.filter(
@@ -186,53 +167,11 @@ export default function SubscriptionsPage() {
                   ? noPriceSubscriptions
                   : activeSubscriptions;
 
-      const query =
-        search
-          .trim()
-          .toLowerCase();
-
-      if (query) {
-        result =
-          result.filter(
-            (item) =>
-              item.name
-                .toLowerCase()
-                .includes(query) ||
-              item.currentStore
-                ?.toLowerCase()
-                .includes(query)
-          );
-      }
-
-      return [...result].sort(
-        (a, b) => {
-          switch (sort) {
-            case "current-price":
-              return compareNullableNumbers(
-                a.currentUnitPrice,
-                b.currentUnitPrice
-              );
-
-            case "target-gap":
-              return compareNullableNumbers(
-                targetGap(a),
-                targetGap(b)
-              );
-
-            case "last-checked":
-              return compareNullableDates(
-                b.lastCheckedAt,
-                a.lastCheckedAt
-              );
-
-            case "name":
-            default:
-              return a.name.localeCompare(
-                b.name
-              );
-          }
-        }
+      result = result.filter((item) =>
+        matchesItemSearch(item, search)
       );
+
+      return sortItems(result, sort);
     }, [
       filter,
       search,
@@ -298,23 +237,27 @@ export default function SubscriptionsPage() {
           {!ready || loading ? (
             <ProductsSkeleton />
           ) : !account ? (
-            <EmptySubscriptions
+            <EmptyState
+              icon={CreditCard}
               title="Sign in to view subscriptions"
               description="Use the Login button in the top-right corner."
             />
           ) : forbidden ? (
-            <EmptySubscriptions
+            <EmptyState
+              icon={CreditCard}
               title="No data available"
               description="This Microsoft account does not have access to the PriceWatch data."
             />
           ) : error ? (
-            <EmptySubscriptions
+            <EmptyState
+              icon={CreditCard}
               title="Could not load subscriptions"
               description={error}
             />
           ) : filteredSubscriptions.length ===
             0 ? (
-            <EmptySubscriptions
+            <EmptyState
+              icon={CreditCard}
               title="No subscriptions here"
               description="Try another status, change your search, or add a subscription."
             />
@@ -339,83 +282,3 @@ export default function SubscriptionsPage() {
   );
 }
 
-function EmptySubscriptions({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed bg-background px-6 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-        <CreditCard className="size-5 text-muted-foreground" />
-      </div>
-
-      <h2 className="mt-4 text-base font-semibold">
-        {title}
-      </h2>
-
-      <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function targetGap(
-  item: ItemListItem
-) {
-  if (
-    item.currentUnitPrice === null ||
-    item.targetUnitPrice === null
-  ) {
-    return null;
-  }
-
-  return (
-    item.currentUnitPrice -
-    item.targetUnitPrice
-  );
-}
-
-function compareNullableNumbers(
-  a: number | null,
-  b: number | null
-) {
-  if (a === null && b === null) {
-    return 0;
-  }
-
-  if (a === null) {
-    return 1;
-  }
-
-  if (b === null) {
-    return -1;
-  }
-
-  return a - b;
-}
-
-function compareNullableDates(
-  a: string | null,
-  b: string | null
-) {
-  if (!a && !b) {
-    return 0;
-  }
-
-  if (!a) {
-    return 1;
-  }
-
-  if (!b) {
-    return -1;
-  }
-
-  return (
-    new Date(a).getTime() -
-    new Date(b).getTime()
-  );
-}

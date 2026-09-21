@@ -80,7 +80,7 @@ export function ProductCard({
           archived
             ? "bg-muted-foreground/20"
             : item.belowTarget
-              ? "bg-emerald-500/75"
+              ? "bg-success/75"
               : "bg-border"
         )}
       />
@@ -118,7 +118,7 @@ export function ProductCard({
               Archived
             </Badge>
           ) : item.belowTarget ? (
-            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-500">
+            <Badge variant="success">
               Below target
             </Badge>
           ) : hasTarget && hasCurrent ? (
@@ -229,9 +229,9 @@ export function ProductCard({
                 className={cn(
                   "mt-1 text-xs font-medium tabular-nums",
                   previousPercent < 0
-                    ? "text-emerald-600 dark:text-emerald-400"
+                    ? "text-success"
                     : previousPercent > 0
-                      ? "text-amber-700 dark:text-amber-400"
+                      ? "text-warning"
                       : "text-muted-foreground"
                 )}
               >

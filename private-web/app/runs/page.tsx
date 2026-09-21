@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { Page } from "@/components/page";
+import { StatusBadge } from "@/components/status-badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { apiFetch, getErrorMessage } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
 import type { RunResult, RunSummary } from "@/lib/types";
-import { formatDateTime, formatUnitPrice } from "@/lib/format";
-import { Card, Page, StatusBadge, outlineButton } from "@/components/ui";
 
 export default function RunsPage() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -15,48 +19,60 @@ export default function RunsPage() {
   async function loadRuns() {
     try {
       setRuns(await apiFetch<RunSummary[]>("/api/private/runs?limit=30"));
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(getErrorMessage(err));
     }
   }
 
-  useEffect(() => { loadRuns().catch(console.error); }, []);
+  useEffect(() => {
+    loadRuns().catch(console.error);
+  }, []);
 
   async function openRun(id: string) {
     setSelected(id);
-    setResults(await apiFetch<RunResult[]>(`/api/private/runs/${id}/results`));
+    try {
+      setResults(await apiFetch<RunResult[]>(`/api/private/runs/${id}/results`));
+      setError(null);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
   }
 
   return (
     <Page title="Runs" description="Scrape run history stored in Neon.">
-      {error && <div className="mb-5 text-sm text-red-600">{error}</div>}
+      {error && (
+        <Alert variant="destructive" className="mb-5">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="space-y-3">
         {runs.map((run) => (
-          <Card key={run.id}>
-            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <Card key={run.id} className="gap-0 py-0">
+            <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <StatusBadge value={run.status} />
                   <span className="text-sm font-medium">{formatDateTime(run.startedAt)}</span>
                 </div>
-                <div className="mt-2 text-xs text-zinc-500">
+                <div className="mt-2 text-xs text-muted-foreground">
                   {run.totalItems} items · {run.successful} success · {run.suspicious} suspicious · {run.failed} failed
                 </div>
               </div>
-              <button className={outlineButton} onClick={() => openRun(run.id)}>
+              <Button variant="outline" onClick={() => openRun(run.id)}>
                 {selected === run.id ? "Refresh results" : "View results"}
-              </button>
-            </div>
+              </Button>
+            </CardContent>
 
             {selected === run.id && (
-              <div className="border-t border-zinc-200 p-4">
+              <div className="border-t p-4">
                 {results.length === 0 ? (
-                  <div className="text-sm text-zinc-500">No source results for this run.</div>
+                  <div className="text-sm text-muted-foreground">No source results for this run.</div>
                 ) : (
                   <div className="space-y-2">
                     {results.map((result) => (
-                      <div key={result.id} className="rounded-lg bg-zinc-50 p-3 text-sm">
+                      <div key={result.id} className="rounded-lg bg-muted p-3 text-sm">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="font-medium">{result.itemName} · {result.store ?? "Unknown source"}</div>
                           <div className="flex items-center gap-2">
@@ -64,11 +80,13 @@ export default function RunsPage() {
                             <StatusBadge value={result.reviewStatus} />
                           </div>
                         </div>
-                        <div className="mt-2 text-zinc-600">
+                        <div className="mt-2 text-foreground/75">
                           Unit price: {result.scrapedUnitPrice ?? "—"}
                         </div>
                         {(result.suspiciousReason || result.error) && (
-                          <div className="mt-2 text-xs text-zinc-500">{result.suspiciousReason ?? result.error}</div>
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            {result.suspiciousReason ?? result.error}
+                          </div>
                         )}
                       </div>
                     ))}
