@@ -8,7 +8,7 @@ import {
   useParams,
 } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { ItemFormPage } from "@/components/item-form-page";
+import { ItemFormPage } from "@/components/product-form-page";
 import { SiteHeader } from "@/components/site-header";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { ItemDetail } from "@/lib/types";

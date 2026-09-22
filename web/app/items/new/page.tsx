@@ -1,6 +1,6 @@
 "use client";
 
-import { ItemFormPage } from "@/components/item-form-page";
+import { ItemFormPage } from "@/components/product-form-page";
 import { useAuth } from "@/components/auth-provider";
 
 export default function NewItemPage() {
