@@ -9,6 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@pricewatch/api": "*",
+    "@pricewatch/design-system": "*",
+    "@pricewatch/shared": "*",
+    "@pricewatch/ui": "*",
     "@azure/msal-browser": "^5.22.0",
     "@azure/msal-react": "^5.7.1",
     "@base-ui/react": "^1.8.0",

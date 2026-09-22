@@ -4,11 +4,11 @@ import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Page } from "@/components/page";
 import { StatusBadge } from "@/components/status-badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@pricewatch/ui/alert";
+import { Card, CardContent } from "@pricewatch/ui/card";
+import { Input } from "@pricewatch/ui/input";
 import { apiFetch, getErrorMessage } from "@/lib/api";
-import { formatDateTime, formatUnitPrice } from "@/lib/format";
+import { formatDateTime, formatUnitPrice } from "@pricewatch/shared/format";
 import type { PrivateItem } from "@/lib/types";
 
 export default function ItemsPage() {

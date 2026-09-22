@@ -2,7 +2,7 @@ import {
   Card,
   CardContent,
   CardHeader,
-} from "@/components/ui/card";
+} from "@pricewatch/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function ProductsSkeleton() {

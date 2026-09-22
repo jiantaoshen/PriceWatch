@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { Page } from "@/components/page";
 import { StatusBadge } from "@/components/status-badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@pricewatch/ui/alert";
+import { Button } from "@pricewatch/ui/button";
+import { Card, CardContent } from "@pricewatch/ui/card";
 import { apiFetch, getErrorMessage } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@pricewatch/shared/format";
 import type { RunResult, RunSummary } from "@/lib/types";
 
 export default function RunsPage() {

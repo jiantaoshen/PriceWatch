@@ -15,24 +15,24 @@ import {
   useState,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@pricewatch/ui/badge";
 import {
   Button,
   buttonVariants,
-} from "@/components/ui/button";
+} from "@pricewatch/ui/button";
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
-} from "@/components/ui/card";
+} from "@pricewatch/ui/card";
 import { apiFetch } from "@/lib/api";
 import {
   formatDate,
   formatMoney,
   formatRelativeDifference,
   formatUnitPrice,
-} from "@/lib/format";
+} from "@pricewatch/shared/format";
 import type { ItemListItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 

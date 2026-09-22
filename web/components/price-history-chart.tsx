@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatUnitPrice } from "@/lib/format";
+import { formatUnitPrice } from "@pricewatch/shared/format";
 import type { PriceHistoryPoint } from "@/lib/types";
 
 export function PriceHistoryChart({

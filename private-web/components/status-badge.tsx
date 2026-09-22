@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@pricewatch/ui/badge";
 
 type BadgeVariant = "success" | "warning" | "destructive" | "secondary";
 
