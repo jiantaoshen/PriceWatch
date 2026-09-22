@@ -33,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@pricewatch/ui/alert-dialog";
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@pricewatch/ui/badge";
 import {
   Button,
