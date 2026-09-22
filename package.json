@@ -11,5 +11,8 @@
     "dev:private": "npm run dev --workspace=pricewatch-private-web",
     "build:web": "npm run build --workspace=web",
     "build:private": "npm run build --workspace=pricewatch-private-web"
+  },
+  "optionalDependencies": {
+    "lightningcss-linux-x64-gnu": "1.32.0"
   }
 }
