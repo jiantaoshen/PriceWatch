@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
 
 export const metadata: Metadata = {
   title: "PriceWatch Private",
@@ -13,7 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={cn(
+        "font-sans",
+        geist.variable
+      )}
+    >
       <body>
         <SiteHeader />
         {children}

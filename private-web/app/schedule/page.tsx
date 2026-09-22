@@ -3,12 +3,12 @@
 import { Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Page } from "@/components/page";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@pricewatch/ui/alert";
+import { Button } from "@pricewatch/ui/button";
+import { Card, CardContent } from "@pricewatch/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@pricewatch/ui/input";
+import { Label } from "@pricewatch/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { apiFetch, getErrorMessage } from "@/lib/api";
 import type { ScheduleStatus } from "@/lib/types";

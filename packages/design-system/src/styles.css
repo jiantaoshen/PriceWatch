@@ -1,0 +1,159 @@
+/* =========================================
+   PriceWatch — shared brand theme
+   ========================================= */
+
+:root {
+  --radius: 0.625rem;
+
+  /* Brand */
+  --brand-dark: #182033;
+  --brand-role: #7196c9;
+  --brand-role-strong: #5576a3;
+  --brand-soft: #dce8f5;
+  --brand-light: #fafbfd;
+  --brand-white: #ffffff;
+
+  --brand-slate: #5f6c84;
+
+  /* Semantic */
+  --background: var(--brand-white);
+  --foreground: var(--brand-dark);
+
+  --card: var(--brand-white);
+  --card-foreground: var(--brand-dark);
+
+  --popover: var(--brand-white);
+  --popover-foreground: var(--brand-dark);
+
+  --primary: var(--brand-role-strong);
+  --primary-foreground: var(--brand-white);
+
+  --secondary: var(--brand-soft);
+  --secondary-foreground: var(--brand-dark);
+
+  --muted: var(--brand-light);
+  --muted-foreground: var(--brand-slate);
+
+  --accent: var(--brand-soft);
+  --accent-foreground: var(--brand-dark);
+
+  --destructive: #dc2626;
+  --destructive-foreground: var(--brand-white);
+
+  --success: #15803d;
+  --success-foreground: var(--brand-white);
+
+  --warning: #a16207;
+  --warning-foreground: var(--brand-white);
+
+  --border: #dce8f5;
+  --input: var(--border);
+  --ring: var(--brand-role-strong);
+
+  /* Charts */
+  --chart-1: var(--brand-role);
+  --chart-2: #5279ad;
+  --chart-3: #94afd3;
+  --chart-4: #385b8a;
+  --chart-5: #b9cce4;
+
+  /* Sidebar, if used later */
+  --sidebar: var(--brand-light);
+  --sidebar-foreground: var(--brand-dark);
+  --sidebar-primary: var(--brand-role-strong);
+  --sidebar-primary-foreground: var(--brand-white);
+  --sidebar-accent: var(--brand-soft);
+  --sidebar-accent-foreground: var(--brand-dark);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--brand-role-strong);
+}
+
+
+/* =========================================
+   Tailwind semantic mapping
+   ========================================= */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+
+/* =========================================
+   Base
+   ========================================= */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply bg-background;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  select {
+    @apply cursor-pointer;
+  }
+
+  ::selection {
+    @apply bg-primary text-primary-foreground;
+  }
+}

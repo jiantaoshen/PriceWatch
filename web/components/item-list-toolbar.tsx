@@ -6,8 +6,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { buttonVariants } from "@pricewatch/ui/button";
+import { Input } from "@pricewatch/ui/input";
 import {
   Select,
   SelectContent,

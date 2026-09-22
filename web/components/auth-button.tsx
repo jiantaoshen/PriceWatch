@@ -1,7 +1,7 @@
 "use client";
 
 import { LogIn, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@pricewatch/ui/button";
 import { useAuth } from "@/components/auth-provider";
 
 export function AuthButton() {

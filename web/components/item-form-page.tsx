@@ -15,19 +15,19 @@ import {
 } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@pricewatch/ui/alert";
 import {
   Button,
   buttonVariants,
-} from "@/components/ui/button";
+} from "@pricewatch/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@pricewatch/ui/card";
+import { Input } from "@pricewatch/ui/input";
+import { Label } from "@pricewatch/ui/label";
 import {
   Select,
   SelectContent,

@@ -22,7 +22,7 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { PriceHistoryChart } from "@/components/price-history-chart";
 import { SiteHeader } from "@/components/site-header";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@pricewatch/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,17 +34,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@pricewatch/ui/badge";
 import {
   Button,
   buttonVariants,
-} from "@/components/ui/button";
+} from "@pricewatch/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@pricewatch/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ApiError, apiFetch } from "@/lib/api";
 import {
@@ -53,7 +53,7 @@ import {
   formatMoney,
   formatRelativeDifference,
   formatUnitPrice,
-} from "@/lib/format";
+} from "@pricewatch/shared/format";
 import type {
   ItemDetail,
   PriceHistoryPoint,

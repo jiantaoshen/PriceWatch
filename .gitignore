@@ -40,7 +40,6 @@ coverage.*
 # NuGet
 *.nupkg
 *.snupkg
-packages/
 .nuget/
 
 # Local publish/build output

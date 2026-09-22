@@ -15,27 +15,27 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState } from "@/components/empty-state";
 import { WorkspacePage } from "@/components/workspace-page";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@pricewatch/ui/alert";
+import { Badge } from "@pricewatch/ui/badge";
 import {
   Button,
   buttonVariants,
-} from "@/components/ui/button";
+} from "@pricewatch/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@pricewatch/ui/card";
+import { Input } from "@pricewatch/ui/input";
+import { Label } from "@pricewatch/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, apiFetch } from "@/lib/api";
 import {
   formatDateTime,
   formatUnitPrice,
-} from "@/lib/format";
+} from "@pricewatch/shared/format";
 import type { PendingReview } from "@/lib/types";
 
 export default function ReviewsPage() {

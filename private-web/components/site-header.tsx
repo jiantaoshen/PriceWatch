@@ -3,8 +3,8 @@
 import { Activity, CalendarClock, Cloud, Package, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Badge } from "@pricewatch/ui/badge";
+import { buttonVariants } from "@pricewatch/ui/button";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: Activity },
