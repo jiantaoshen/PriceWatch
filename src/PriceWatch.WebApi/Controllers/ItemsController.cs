@@ -71,7 +71,16 @@ public class ItemsController : ControllerBase
                 BelowTarget =
                     x.TargetUnitPrice != null &&
                     x.CurrentUnitPrice != null &&
-                    x.CurrentUnitPrice <= x.TargetUnitPrice
+                    x.CurrentUnitPrice <= x.TargetUnitPrice,
+
+                MonthlyPrice = x.ItemType == ItemType.Subscription
+                ? x.Sources
+                    .Where(s =>
+                        !s.ScrapingEnabled &&
+                        s.ManualPrice != null)
+                    .Select(s => s.ManualPrice)
+                    .FirstOrDefault()
+                : null,
             })
             .ToListAsync(ct);
 
