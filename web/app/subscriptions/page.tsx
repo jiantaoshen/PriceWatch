@@ -1,104 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState } from "@/components/empty-state";
-import { WorkspacePage } from "@/components/workspace-page";
-import { SubscriptionCard } from "@/components/subscription-card";
-import {
-  SubscriptionFilter,
-  SubscriptionStatusNav,
-} from "@/components/subscription-status-nav";
-import {
-  SubscriptionSort,
-  SubscriptionToolbar,
-} from "@/components/subscription-toolbar";
 import { ProductsSkeleton } from "@/components/products-skeleton";
+import { SubscriptionCard } from "@/components/subscription-card";
+import { SubscriptionStatusNav, type SubscriptionFilter } from "@/components/subscription-status-nav";
+import { SubscriptionToolbar, type SubscriptionSort } from "@/components/subscription-toolbar";
+import { WorkspacePage } from "@/components/workspace-page";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { ItemListItem } from "@/lib/types";
+
+async function fetchSubscriptionsData(accessToken: string) {
+  return apiFetch<ItemListItem[]>("/api/items?includeArchived=true", accessToken);
+}
 
 export default function SubscriptionsPage() {
   const { ready, account, getAccessToken } = useAuth();
 
   const [items, setItems] = useState<ItemListItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<SubscriptionFilter>("active");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SubscriptionSort>("name");
 
-  async function loadData() {
-    if (!account) {
-      setItems([]);
-      return;
-    }
-
-    setLoading(true);
-    setForbidden(false);
-    setError(null);
-
-    try {
-      const token = await getAccessToken();
-
-      const result = await apiFetch<ItemListItem[]>(
-        "/api/items?includeArchived=true",
-        token.accessToken
-      );
-
-      setItems(result);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setForbidden(true);
-        setItems([]);
-      } else {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    if (ready) void loadData();
+    if (!ready || !account) return;
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, account]);
+    let cancelled = false;
+
+    void getAccessToken()
+      .then((token) => {
+        if (!cancelled) {
+          setLoading(true);
+          setForbidden(false);
+          setError(null);
+        }
+
+        return fetchSubscriptionsData(token.accessToken);
+      })
+      .then((items) => {
+        if (!cancelled) setItems(items);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+
+        if (err instanceof ApiError && err.status === 403) {
+          setForbidden(true);
+          setItems([]);
+        } else {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, account, getAccessToken]);
+
+  async function reloadData() {
+    const token = await getAccessToken();
+    const items = await fetchSubscriptionsData(token.accessToken);
+    setItems(items);
+  }
 
   const subscriptions = items.filter((item) => item.itemType === "Subscription");
   const activeSubscriptions = subscriptions.filter((item) => !item.archivedAt);
   const archivedSubscriptions = subscriptions.filter((item) => item.archivedAt);
 
-  const monthlyTotal = activeSubscriptions.reduce(
-    (sum, item) => sum + (item.monthlyPrice ?? 0),
-    0
-  );
-
+  const monthlyTotal = activeSubscriptions.reduce((sum, item) => sum + (item.monthlyPrice ?? 0), 0);
   const currency = activeSubscriptions[0]?.currency ?? "SEK";
 
-  const filteredSubscriptions = (
-    filter === "archived"
-      ? archivedSubscriptions
-      : activeSubscriptions
-  )
-    .filter((item) =>
-      item.name.toLowerCase().includes(search.trim().toLowerCase())
-    )
-    .sort((a, b) => {
-      if (sort === "current-price") {
-        return (a.monthlyPrice ?? 0) - (b.monthlyPrice ?? 0);
-      }
+  const visibleSubscriptions = filter === "archived" ? archivedSubscriptions : activeSubscriptions;
 
+  const filteredSubscriptions = visibleSubscriptions
+    .filter((item) => item.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => {
+      if (sort === "current-price") return (a.monthlyPrice ?? 0) - (b.monthlyPrice ?? 0);
       return a.name.localeCompare(b.name);
     });
 
   return (
-    <WorkspacePage
-      title="Subscriptions"
-      description="Track your recurring monthly expenses."
-    >
+    <WorkspacePage title="Subscriptions" description="Track your recurring monthly expenses.">
       <SubscriptionStatusNav
         activeFilter={filter}
         onChange={setFilter}
@@ -108,26 +98,14 @@ export default function SubscriptionsPage() {
         currency={currency}
       />
 
-      <SubscriptionToolbar
-        search={search}
-        onSearchChange={setSearch}
-        sort={sort}
-        onSortChange={setSort}
-      />
+      <SubscriptionToolbar search={search} onSearchChange={setSearch} sort={sort} onSortChange={setSort} />
 
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground">
-          Showing{" "}
-          <span className="font-medium text-foreground">
-            {filteredSubscriptions.length}
-          </span>{" "}
-          {filteredSubscriptions.length === 1
-            ? "subscription"
-            : "subscriptions"}
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Showing <span className="font-medium text-foreground">{filteredSubscriptions.length}</span>{" "}
+        {filteredSubscriptions.length === 1 ? "subscription" : "subscriptions"}
+      </p>
 
-      {!ready || loading ? (
+      {!ready ? (
         <ProductsSkeleton />
       ) : !account ? (
         <EmptyState
@@ -135,6 +113,8 @@ export default function SubscriptionsPage() {
           title="Sign in to view subscriptions"
           description="Use the Login button in the top-right corner."
         />
+      ) : loading ? (
+        <ProductsSkeleton />
       ) : forbidden ? (
         <EmptyState
           icon={CreditCard}
@@ -142,11 +122,7 @@ export default function SubscriptionsPage() {
           description="This Microsoft account does not have access to the PriceWatch data."
         />
       ) : error ? (
-        <EmptyState
-          icon={CreditCard}
-          title="Could not load subscriptions"
-          description={error}
-        />
+        <EmptyState icon={CreditCard} title="Could not load subscriptions" description={error} />
       ) : filteredSubscriptions.length === 0 ? (
         <EmptyState
           icon={CreditCard}
@@ -156,11 +132,7 @@ export default function SubscriptionsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredSubscriptions.map((item) => (
-            <SubscriptionCard
-              key={item.id}
-              item={item}
-              onRestored={() => void loadData()}
-            />
+            <SubscriptionCard key={item.id} item={item} onRestored={() => void reloadData()} />
           ))}
         </div>
       )}

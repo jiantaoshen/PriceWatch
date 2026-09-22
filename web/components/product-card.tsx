@@ -4,7 +4,6 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  CalendarDays,
   CircleDollarSign,
   Pause,
   RotateCcw,
@@ -24,7 +23,6 @@ import {
 } from "@pricewatch/ui/card";
 import {
   formatDate,
-  formatMoney,
   formatRelativeDifference,
   formatUnitPrice,
 } from "@pricewatch/shared/format";
@@ -42,7 +40,6 @@ export function ProductCard({
 }) {
   const archived = Boolean(item.archivedAt);
   const hasCurrent = item.currentUnitPrice !== null;
-  const hasTarget = item.targetUnitPrice !== null;
 
   const targetDifference =
     formatRelativeDifference(

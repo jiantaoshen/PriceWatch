@@ -28,6 +28,24 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { formatDateTime, formatMoney, formatRelativeDifference, formatUnitPrice } from "@pricewatch/shared/format";
 import type { ItemDetail, PriceHistoryPoint, SourceOffer } from "@/lib/types";
 
+async function fetchProductDetailData(id: string, accessToken: string) {
+  const item = await apiFetch<ItemDetail>(`/api/items/${id}`, accessToken);
+
+  const [historyResult, offersResult] = await Promise.allSettled([
+    apiFetch<PriceHistoryPoint[]>(`/api/items/${id}/history`, accessToken),
+    apiFetch<SourceOffer[]>(`/api/items/${id}/offers`, accessToken),
+  ]);
+
+  if (historyResult.status === "rejected") console.error("Could not load history:", historyResult.reason);
+  if (offersResult.status === "rejected") console.error("Could not load offers:", offersResult.reason);
+
+  return {
+    item,
+    history: historyResult.status === "fulfilled" ? historyResult.value : [],
+    offers: offersResult.status === "fulfilled" ? offersResult.value : [],
+  };
+}
+
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -40,58 +58,45 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
 
-  async function load() {
-    if (!account) {
-      setItem(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const token = await getAccessToken();
-      const itemResult = await apiFetch<ItemDetail>(`/api/items/${params.id}`, token.accessToken);
-
-      setItem(itemResult);
-
-      const [historyResult, offersResult] = await Promise.allSettled([
-        apiFetch<PriceHistoryPoint[]>(`/api/items/${params.id}/history`, token.accessToken),
-        apiFetch<SourceOffer[]>(`/api/items/${params.id}/offers`, token.accessToken),
-      ]);
-
-      if (historyResult.status === "fulfilled") {
-        setHistory(historyResult.value);
-      } else {
-        console.error("Could not load history:", historyResult.reason);
-        setHistory([]);
-      }
-
-      if (offersResult.status === "fulfilled") {
-        setOffers(offersResult.value);
-      } else {
-        console.error("Could not load offers:", offersResult.reason);
-        setOffers([]);
-      }
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setError("No data available.");
-      } else if (err instanceof ApiError && err.status === 404) {
-        setError("Product not found.");
-      } else {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    if (ready) void load();
+    if (!ready || !account) return;
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, account, params.id]);
+    let cancelled = false;
+
+    void getAccessToken()
+      .then((token) => {
+        if (!cancelled) {
+          setLoading(true);
+          setError(null);
+        }
+
+        return fetchProductDetailData(params.id, token.accessToken);
+      })
+      .then(({ item, history, offers }) => {
+        if (cancelled) return;
+        setItem(item);
+        setHistory(history);
+        setOffers(offers);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+
+        if (err instanceof ApiError && err.status === 403) {
+          setError("No data available.");
+        } else if (err instanceof ApiError && err.status === 404) {
+          setError("Product not found.");
+        } else {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, account, getAccessToken, params.id]);
 
   const historicalLow = useMemo(
     () => (history.length ? Math.min(...history.map((point) => point.unitPrice)) : null),
@@ -120,7 +125,10 @@ export default function ProductDetailPage() {
         return;
       }
 
-      await load();
+      const result = await fetchProductDetailData(params.id, token.accessToken);
+      setItem(result.item);
+      setHistory(result.history);
+      setOffers(result.offers);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -133,18 +141,17 @@ export default function ProductDetailPage() {
       <SiteHeader />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-        {!ready || loading ? (
+        {!ready ? (
           <div className="py-20 text-center text-sm text-muted-foreground">Loading product…</div>
         ) : !account ? (
           <EmptyMessage message="Sign in to view this product." />
+        ) : loading ? (
+          <div className="py-20 text-center text-sm text-muted-foreground">Loading product…</div>
         ) : error ? (
           <EmptyMessage message={error} />
         ) : item ? (
           <div className="space-y-6">
-            <Link
-              href="/"
-              className={buttonVariants({ variant: "ghost", size: "sm", className: "-ml-2" })}
-            >
+            <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm", className: "-ml-2" })}>
               <ArrowLeft className="size-4" />
               Products
             </Link>
@@ -161,7 +168,6 @@ export default function ProductDetailPage() {
 
                 <div className="mt-5">
                   <div className="text-sm text-muted-foreground">Current unit price</div>
-
                   <div className="mt-1 text-4xl font-semibold tracking-tight tabular-nums">
                     {formatUnitPrice(item.currentUnitPrice, item.currency, item.unit)}
                   </div>
@@ -172,7 +178,6 @@ export default function ProductDetailPage() {
                         Best at <span className="font-medium text-foreground">{item.currentStore}</span>
                       </span>
                     )}
-
                     {targetDifference && <span>{targetDifference}</span>}
                   </div>
                 </div>
@@ -274,7 +279,6 @@ export default function ProductDetailPage() {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="font-medium">{offer.store}</h3>
-
                               <Badge variant={offer.isCurrent ? "default" : "secondary"}>
                                 {offer.isCurrent
                                   ? "Current best"
