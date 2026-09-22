@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Archive,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
@@ -13,7 +12,6 @@ import {
   Target,
 } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@pricewatch/ui/badge";
 import {
   Button,
   buttonVariants,
@@ -67,26 +65,22 @@ export function ProductCard({
       : null;
 
   return (
-    <Card
-      className={cn(
-        "group relative flex h-full flex-col overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        archived &&
-          "border-dashed bg-muted/15 hover:translate-y-0"
-      )}
-    >
+    /*
+      "&& in cn"
+      className={cn(archived && "border-dashed bg-muted")} == 
+      className={archived ? "bg-muted"  : ""}
+    */
+    <Card className={cn("group relative h-full", archived && "bg-muted")}>
+
       <div
         className={cn(
           "absolute inset-x-0 top-0 h-1",
-          archived
-            ? "bg-muted-foreground/20"
-            : item.belowTarget
-              ? "bg-success/75"
-              : "bg-border"
+          archived ? "bg-muted-foreground" : item.belowTarget ? "bg-success" : "bg-border"
         )}
       />
 
       <CardHeader className="space-y-3 pb-4 pt-6">
-        <div className="flex min-w-0 items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start">
           <div className="min-w-0">
             <h3 className="line-clamp-2 min-h-12 text-base font-semibold leading-6 tracking-tight">
               {item.name}
@@ -101,7 +95,9 @@ export function ProductCard({
                   : "stores"}
               </span>
 
-              <span>{item.updateMode}</span>
+              <span>
+                {archived ? "Archived" : item.updateMode}
+              </span>
 
               {!item.trackingEnabled && !archived && (
                 <span className="inline-flex items-center gap-1">
@@ -111,34 +107,13 @@ export function ProductCard({
               )}
             </div>
           </div>
-
-          {archived ? (
-            <Badge variant="secondary">
-              <Archive className="mr-1 size-3" />
-              Archived
-            </Badge>
-          ) : item.belowTarget ? (
-            <Badge variant="success">
-              Below target
-            </Badge>
-          ) : hasTarget && hasCurrent ? (
-            <Badge variant="outline">
-              Above target
-            </Badge>
-          ) : (
-            <Badge variant="secondary">
-              No price
-            </Badge>
-          )}
         </div>
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col gap-5">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            {archived
-              ? "Last known unit price"
-              : "Current unit price"}
+            Last known unit price
           </div>
 
           {hasCurrent ? (
@@ -146,7 +121,7 @@ export function ProductCard({
               <div
                 className={cn(
                   "text-3xl font-semibold tracking-tight tabular-nums",
-                  archived && "text-muted-foreground"
+                  archived ? "text-muted-foreground" : item.belowTarget ? "text-success" : ""
                 )}
               >
                 {formatUnitPrice(
@@ -242,29 +217,7 @@ export function ProductCard({
           </div>
         </div>
 
-        <div className="mt-auto space-y-2 border-t pt-4 text-xs text-muted-foreground">
-          <div className="flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-1.5">
-              <CalendarDays className="size-3.5" />
-              Last purchase
-            </span>
-
-            <span className="text-right tabular-nums">
-              {item.lastPurchasePrice !== null
-                ? `${formatMoney(
-                    item.lastPurchasePrice,
-                    item.currency
-                  )}${
-                    item.lastPurchaseDate
-                      ? ` · ${formatDate(
-                          item.lastPurchaseDate
-                        )}`
-                      : ""
-                  }`
-                : "—"}
-            </span>
-          </div>
-
+        <div className="mt-auto border-t pt-4 text-xs text-muted-foreground">
           <div className="flex items-center justify-between gap-3">
             <span>
               {archived ? "Archived" : "Last checked"}
