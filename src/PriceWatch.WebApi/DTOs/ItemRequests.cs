@@ -16,10 +16,6 @@ public sealed class CreateItemRequest
 
     public decimal ComparisonQuantity { get; init; } = 1m;
 
-    public decimal? LastPurchasePrice { get; init; }
-
-    public DateOnly? LastPurchaseDate { get; init; }
-
     public UpdateMode UpdateMode { get; init; } = UpdateMode.Manual;
 
     public int? CheckIntervalMinutes { get; init; }
@@ -40,10 +36,6 @@ public sealed class UpdateItemRequest
     public decimal? TargetPrice { get; init; }
 
     public decimal ComparisonQuantity { get; init; } = 1m;
-
-    public decimal? LastPurchasePrice { get; init; }
-
-    public DateOnly? LastPurchaseDate { get; init; }
 
     public UpdateMode UpdateMode { get; init; }
 

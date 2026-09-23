@@ -36,8 +36,6 @@ type FormState = {
   unit: string;
   targetPrice: string;
   comparisonQuantity: string;
-  lastPurchasePrice: string;
-  lastPurchaseDate: string;
   updateMode: UpdateMode;
   checkIntervalMinutes: string;
   trackingEnabled: boolean;
@@ -62,8 +60,6 @@ function toFormState(item?: ItemDetail): FormState {
     unit: item?.unit ?? "pcs",
     targetPrice: item?.targetPrice?.toString() ?? "",
     comparisonQuantity: item?.comparisonQuantity?.toString() ?? "1",
-    lastPurchasePrice: item?.lastPurchasePrice?.toString() ?? "",
-    lastPurchaseDate: item?.lastPurchaseDate ?? "",
     updateMode: item?.updateMode ?? "Automatic",
     checkIntervalMinutes: item?.checkIntervalMinutes?.toString() ?? "",
     trackingEnabled: item?.trackingEnabled ?? true,
@@ -134,8 +130,6 @@ export function ItemFormPage({
         unit: emptyToNull(form.unit),
         targetPrice: toNullableNumber(form.targetPrice),
         comparisonQuantity: Number(form.comparisonQuantity),
-        lastPurchasePrice: toNullableNumber(form.lastPurchasePrice),
-        lastPurchaseDate: emptyToNull(form.lastPurchaseDate),
         updateMode: form.updateMode,
         checkIntervalMinutes: toNullableInteger(form.checkIntervalMinutes),
         trackingEnabled: form.trackingEnabled,

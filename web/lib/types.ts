@@ -23,9 +23,6 @@ export type ItemListItem = {
   currentStore: string | null;
   sourceCount: number;
 
-  lastPurchasePrice: number | null;
-  lastPurchaseDate: string | null;
-
   updateMode: UpdateMode;
   checkIntervalMinutes: number | null;
   trackingEnabled: boolean;
@@ -72,9 +69,6 @@ export type ItemDetail = {
   previousUnitPrice: number | null;
   previousSourceId: number | null;
   previousStore: string | null;
-
-  lastPurchasePrice: number | null;
-  lastPurchaseDate: string | null;
 
   updateMode: UpdateMode;
   checkIntervalMinutes: number | null;

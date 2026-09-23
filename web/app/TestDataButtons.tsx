@@ -114,8 +114,6 @@ export default function TestDataButtons({
           unit: entry.unit,
           targetPrice: entry.targetPrice,
           comparisonQuantity: entry.comparisonQuantity,
-          lastPurchasePrice: entry.lastPurchasePrice,
-          lastPurchaseDate: entry.lastPurchaseDate,
           updateMode: entry.updateMode,
           checkIntervalMinutes: entry.checkIntervalMinutes,
           trackingEnabled: entry.trackingEnabled,

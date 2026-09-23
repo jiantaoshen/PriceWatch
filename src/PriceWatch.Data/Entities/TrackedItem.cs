@@ -53,16 +53,6 @@ public class TrackedItem
 
     public ItemSource? PreviousSource { get; set; }
 
-
-    // -------------------------
-    // Last purchase
-    // -------------------------
-
-    public decimal? LastPurchasePrice { get; set; }
-
-    public DateOnly? LastPurchaseDate { get; set; }
-
-
     // -------------------------
     // Tracking
     // -------------------------

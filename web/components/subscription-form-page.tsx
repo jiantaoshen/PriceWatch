@@ -96,11 +96,9 @@ export function SubscriptionFormPage({
         unit: "month",
         targetPrice: null,
         comparisonQuantity: 1,
-        lastPurchasePrice: null,
-        lastPurchaseDate: null,
         updateMode: "Manual",
         checkIntervalMinutes: null,
-        trackingEnabled: true,
+        trackingEnabled: false,
       };
 
       let itemId = initialItem?.id;
