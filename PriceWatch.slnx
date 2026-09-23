@@ -5,7 +5,5 @@
     <Project Path="src/PriceWatch.Private/PriceWatch.Private.csproj" />
     <Project Path="src/PriceWatch.WebApi/PriceWatch.WebApi.csproj" />
   </Folder>
-  <Folder Name="/tools/">
-    <Project Path="tools/PriceWatch.Migrator/PriceWatch.Migrator.csproj" />
-  </Folder>
+  <Folder Name="/tools/" />
 </Solution>

@@ -112,9 +112,6 @@ public class PriceWatchDbContext : DbContext
                     """,
                     stored: true);
 
-            entity.Property(x => x.LastPurchasePrice)
-                .HasPrecision(18, 4);
-
             entity.HasMany(x => x.Sources)
                 .WithOne(x => x.Item)
                 .HasForeignKey(x => x.ItemId)

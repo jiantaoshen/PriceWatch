@@ -55,9 +55,6 @@ public class ItemsController : ControllerBase
 
                 SourceCount = x.Sources.Count,
 
-                x.LastPurchasePrice,
-                x.LastPurchaseDate,
-
                 x.UpdateMode,
                 x.CheckIntervalMinutes,
                 x.TrackingEnabled,
@@ -125,9 +122,6 @@ public class ItemsController : ControllerBase
                 PreviousStore = x.PreviousSource != null
                     ? x.PreviousSource.Store
                     : null,
-
-                x.LastPurchasePrice,
-                x.LastPurchaseDate,
 
                 x.UpdateMode,
                 x.CheckIntervalMinutes,
@@ -212,7 +206,6 @@ public class ItemsController : ControllerBase
             request.Currency,
             request.TargetPrice,
             request.ComparisonQuantity,
-            request.LastPurchasePrice,
             request.CheckIntervalMinutes);
 
         if (validationError is not null)
@@ -231,9 +224,6 @@ public class ItemsController : ControllerBase
 
             TargetPrice = request.TargetPrice,
             ComparisonQuantity = request.ComparisonQuantity,
-
-            LastPurchasePrice = request.LastPurchasePrice,
-            LastPurchaseDate = request.LastPurchaseDate,
 
             UpdateMode = request.UpdateMode,
             CheckIntervalMinutes = request.CheckIntervalMinutes,
@@ -264,7 +254,6 @@ public class ItemsController : ControllerBase
             request.Currency,
             request.TargetPrice,
             request.ComparisonQuantity,
-            request.LastPurchasePrice,
             request.CheckIntervalMinutes);
 
         if (validationError is not null)
@@ -287,9 +276,6 @@ public class ItemsController : ControllerBase
 
         item.TargetPrice = request.TargetPrice;
         item.ComparisonQuantity = request.ComparisonQuantity;
-
-        item.LastPurchasePrice = request.LastPurchasePrice;
-        item.LastPurchaseDate = request.LastPurchaseDate;
 
         item.UpdateMode = request.UpdateMode;
         item.CheckIntervalMinutes = request.CheckIntervalMinutes;
@@ -710,7 +696,6 @@ public async Task<IActionResult> GetOffers(
         string currency,
         decimal? targetPrice,
         decimal comparisonQuantity,
-        decimal? lastPurchasePrice,
         int? checkIntervalMinutes)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -741,11 +726,6 @@ public async Task<IActionResult> GetOffers(
         if (targetPrice is < 0)
         {
             return "TargetPrice cannot be negative.";
-        }
-
-        if (lastPurchasePrice is < 0)
-        {
-            return "LastPurchasePrice cannot be negative.";
         }
 
         if (checkIntervalMinutes is <= 0)
