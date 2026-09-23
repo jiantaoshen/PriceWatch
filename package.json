@@ -10,7 +10,10 @@
     "dev:web": "npm run dev --workspace=web",
     "dev:private": "npm run dev --workspace=pricewatch-private-web",
     "build:web": "npm run build --workspace=web",
-    "build:private": "npm run build --workspace=pricewatch-private-web"
+    "build:private": "npm run build --workspace=pricewatch-private-web",
+    "lint:web": "npm run lint --workspace=web",
+    "lint:private": "npm run lint --workspace=pricewatch-private-web",
+    "lint": "npm run lint:web && npm run lint:private"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",

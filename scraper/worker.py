@@ -71,7 +71,7 @@ async def _run():
         return
 
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=headless)
+        browser = await playwright.firefox.launch(headless=headless)
         context = await browser.new_context(
             locale="sv-SE",
             viewport={"width": 1440, "height": 1100},

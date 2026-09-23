@@ -8,14 +8,13 @@ import {
   useParams,
 } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { ItemFormPage } from "@/components/item-form-page";
+import { ItemFormPage } from "@/components/product-form-page";
 import { SiteHeader } from "@/components/site-header";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { ItemDetail } from "@/lib/types";
 
 export default function EditItemPage() {
-  const params =
-    useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
 
   const {
     ready,
@@ -23,24 +22,16 @@ export default function EditItemPage() {
     getAccessToken,
   } = useAuth();
 
-  const [item, setItem] =
-    useState<ItemDetail | null>(null);
+  const [item, setItem] = useState<ItemDetail | null>(null);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!ready) {
-      return;
-    }
-
-    if (!account) {
-      setLoading(false);
-      return;
-    }
+    
+    if (!ready) return;
+    if (!account) return;
 
     async function load() {
       try {

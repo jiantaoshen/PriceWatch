@@ -1,6 +1,6 @@
 "use client";
 
-import { ItemListToolbar } from "@/components/item-list-toolbar";
+import { ItemListToolbar } from "@/components/product-list-toolbar";
 import type { ItemSort } from "@/lib/item-list";
 
 export type ProductSort = ItemSort;

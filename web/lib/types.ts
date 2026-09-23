@@ -18,6 +18,8 @@ export type ItemListItem = {
   currentUnitPrice: number | null;
   previousUnitPrice: number | null;
 
+  monthlyPrice: number | null;
+
   currentStore: string | null;
   sourceCount: number;
 
