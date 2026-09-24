@@ -66,6 +66,7 @@ PriceWatch supports multiple sources per item, manual/automatic/hybrid updates, 
 Restore and build the .NET solution:
 
 ```powershell
+winget install Microsoft.DotNet.SDK.10
 dotnet restore
 dotnet build
 ```
@@ -87,6 +88,8 @@ dotnet user-secrets set `
 Apply migrations and start the API:
 
 ```powershell
+dotnet tool install --global dotnet-ef
+
 dotnet ef database update `
   --project src/PriceWatch.Data `
   --startup-project src/PriceWatch.WebApi
@@ -119,11 +122,12 @@ npm run dev:web
 Optional local/private workflow:
 
 ```powershell
+py install 3.13
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 python -m pip install -r scraper\requirements.txt
-python -m playwright install chromium
+python -m playwright install firefox
 
 dotnet user-secrets set `
   "ConnectionStrings:Database" `
