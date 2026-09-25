@@ -63,6 +63,8 @@ PriceWatch supports multiple sources per item, manual/automatic/hybrid updates, 
 
 ## Usage
 
+**You need a database, Microsoft Entra and Microsoft Azure App Service to run this project**
+
 Restore and build the .NET solution:
 
 ```powershell
