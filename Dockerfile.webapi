@@ -1,0 +1,30 @@
+# ---------- Build ----------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY src/PriceWatch.Core/PriceWatch.Core.csproj src/PriceWatch.Core/
+COPY src/PriceWatch.Data/PriceWatch.Data.csproj src/PriceWatch.Data/
+COPY src/PriceWatch.WebApi/PriceWatch.WebApi.csproj src/PriceWatch.WebApi/
+
+RUN dotnet restore src/PriceWatch.WebApi/PriceWatch.WebApi.csproj
+
+COPY src/PriceWatch.Core/ src/PriceWatch.Core/
+COPY src/PriceWatch.Data/ src/PriceWatch.Data/
+COPY src/PriceWatch.WebApi/ src/PriceWatch.WebApi/
+
+RUN dotnet publish src/PriceWatch.WebApi/PriceWatch.WebApi.csproj -c Release -o /app/publish --no-restore
+
+# ---------- Runtime ----------
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+EXPOSE 8080
+
+ENTRYPOINT ["dotnet", "PriceWatch.WebApi.dll"]
