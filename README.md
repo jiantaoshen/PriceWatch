@@ -1,18 +1,19 @@
 # PriceWatch
 
-PriceWatch is a personal price-tracking system for products and subscriptions.
+PriceWatch is a personal system for product price tracking and subscription expense management.
 
-It combines a cloud web application with a local/private scraper workflow. The cloud app manages tracked items, reviews price changes, and displays price history, while the local service runs browser automation and scraper operations.
+It combines a cloud web application with a local/private scraping workflow. Products support price tracking, multiple sources, price history, and review of suspicious scrape results, while subscriptions are kept as a simpler recurring-expense model.
 
 ## Tech Stack
 
 - **Frontend:** Next.js, TypeScript, Tailwind CSS, shadcn/ui
-- **API:** ASP.NET Core Web API, C#
+- **API:** ASP.NET Core Web API, .NET 10, C#
 - **Database:** PostgreSQL on Neon, EF Core, Npgsql
 - **Authentication:** Microsoft Entra / MSAL
 - **Scraping:** Python, Playwright
-- **Hosting:** Vercel + Azure App Service
-- **Frontend architecture:** npm workspaces with shared UI, design system, formatting, and HTTP utilities
+- **Hosting:** Vercel + Google Cloud Run
+- **Container Registry:** GitHub Container Registry (GHCR)
+- **Frontend architecture:** npm workspaces with shared UI, design system, utilities, and HTTP infrastructure
 
 ## Architecture
 
@@ -24,11 +25,23 @@ web / Next.js / Vercel
         │
         │ HTTPS + Microsoft access token
         ▼
-PriceWatch.WebApi / Azure App Service
+PriceWatch.WebApi / Google Cloud Run
         │
         │ EF Core + Npgsql
         ▼
 Neon PostgreSQL
+
+
+Container delivery
+────────────────────────────────────────
+
+GitHub
+   │
+   ▼
+GHCR
+   │
+   ▼
+Google Cloud Run
 
 
 Local / Private
@@ -47,7 +60,7 @@ PriceWatch.Private
           Playwright scraper
 
 
-Shared frontend foundations
+Shared frontend packages
 ────────────────────────────────────────
 
 web ───────────────┐
@@ -57,18 +70,37 @@ private-web ───────┤── packages/ui
                    └── packages/api
 ```
 
-The cloud and private applications remain separate, while common UI, styling, formatting, and HTTP infrastructure are shared.
+The cloud and private applications remain separate while sharing common frontend foundations.
 
-PriceWatch supports multiple sources per item, manual/automatic/hybrid updates, normalized unit-price comparison, price history, archive/restore, and review of suspicious scrape results.
+## Features
 
-## Usage
+### Products
 
-**You need a database, Microsoft Entra and Microsoft Azure App Service to run this project**
+- Multiple price sources
+- Manual, automatic, and hybrid updates
+- Normalized unit-price comparison
+- Target prices
+- Price history
+- Archive / restore
+- Review of suspicious scraped prices
 
-Restore and build the .NET solution:
+### Subscriptions
+
+- Name
+- Monthly price
+- Currency
+- Monthly expense total
+- Archive / restore
+
+Product and Subscription are intentionally treated as separate domains.
+
+## Local Development
+
+Install .NET 10 and build:
 
 ```powershell
 winget install Microsoft.DotNet.SDK.10
+
 dotnet restore
 dotnet build
 ```
@@ -105,23 +137,18 @@ Create `web/.env.local`:
 NEXT_PUBLIC_MICROSOFT_CLIENT_ID=YOUR_WEB_CLIENT_ID
 NEXT_PUBLIC_MICROSOFT_TENANT=consumers
 NEXT_PUBLIC_API_SCOPE=api://YOUR_API_CLIENT_ID/access_as_user
-NEXT_PUBLIC_API_URL=https://localhost:YOUR_API_PORT
+NEXT_PUBLIC_API_URL=http://localhost:YOUR_API_PORT
 NEXT_PUBLIC_MICROSOFT_REDIRECT_URI=http://localhost:3000/redirect
 ```
 
-Install frontend dependencies once from the repository root:
+Install frontend dependencies from the repository root:
 
 ```powershell
 npm install
-```
-
-Start the cloud frontend:
-
-```powershell
 npm run dev:web
 ```
 
-Optional local/private workflow:
+## Local Scraper Workflow
 
 ```powershell
 py install 3.13
@@ -130,7 +157,11 @@ py -3.13 -m venv .venv
 
 python -m pip install -r scraper\requirements.txt
 python -m playwright install firefox
+```
 
+Configure and start `PriceWatch.Private`:
+
+```powershell
 dotnet user-secrets set `
   "ConnectionStrings:Database" `
   "YOUR_NEON_CONNECTION_STRING" `
@@ -145,6 +176,24 @@ dotnet run --project src/PriceWatch.Private
 npm run dev:private
 ```
 
-PriceWatch currently uses a single production Neon database for the application and local scraper workflow.
+## Production
+
+The Web API is containerized and published to:
+
+```text
+ghcr.io/jiantaoshen/pricewatch-webapi
+```
+
+The container runs on Google Cloud Run.
+
+Production secrets such as the Neon connection string and owner identity are stored in Google Secret Manager and injected into Cloud Run at runtime.
+
+The frontend is deployed on Vercel and uses the Cloud Run service URL through:
+
+```text
+NEXT_PUBLIC_API_URL
+```
+
+PriceWatch currently uses a single Neon production database across the cloud application and local scraper workflow.
 
 Automated scraping should only be used where permitted by the target site's terms, access rules, and applicable law.
