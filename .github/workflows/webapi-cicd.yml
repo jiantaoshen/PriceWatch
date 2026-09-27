@@ -42,13 +42,13 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Restore
-        run: dotnet restore PriceWatch.sln
+        run: dotnet restore PriceWatch.slnx
 
       - name: Build
-        run: dotnet build PriceWatch.sln -c Release --no-restore
+        run: dotnet build PriceWatch.slnx -c Release --no-restore
 
       - name: Test
-        run: dotnet test PriceWatch.sln -c Release --no-build
+        run: dotnet test PriceWatch.slnx -c Release --no-build
 
       - name: Verify Docker build
         run: docker build -f Dockerfile.webapi -t pricewatch-webapi:ci .
