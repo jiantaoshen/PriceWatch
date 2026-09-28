@@ -1,0 +1,58 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - "private-web/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-ci.yml"
+
+  push:
+    branches:
+      - main
+    paths:
+      - "web/**"
+      - "private-web/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-ci.yml"
+
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Lint and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint web
+        run: npm run lint:web
+
+      - name: Lint private-web
+        run: npm run lint:private
+
+      - name: Build web
+        run: npm run build:web
+
+      - name: Build private-web
+        run: npm run build:private
