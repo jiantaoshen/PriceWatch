@@ -127,15 +127,24 @@ builder.Services.AddAuthorization(options =>
 // CORS
 // ============================================================
 
+var frontendOrigin =
+    builder.Configuration["Frontend:Origin"]
+    ?? "http://localhost:3000";
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
+        var allowedOrigins = new[]
+        {
+            frontendOrigin,
+            "https://pricewatch.jiantao.dev"
+        }
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "https://pricewatch.jiantao.dev"
-            )
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
