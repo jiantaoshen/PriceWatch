@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,24 @@ var settings = builder.Configuration
     .Get<PrivateSettings>()
     ?? new PrivateSettings();
 
+var runOnce = args.Any(x => string.Equals(
+    x,
+    "--run-once",
+    StringComparison.OrdinalIgnoreCase));
+
+if (!runOnce && !IsLoopbackUrl(settings.ListenUrl))
+{
+    throw new InvalidOperationException(
+        "Private API listen URL must use a loopback host.");
+}
+
+if (!runOnce &&
+    (string.IsNullOrWhiteSpace(settings.ApiToken) || settings.ApiToken.Length < 32))
+{
+    throw new InvalidOperationException(
+        "Private API token is missing or too short. Configure at least 32 characters.");
+}
+
 builder.WebHost.UseUrls(settings.ListenUrl);
 
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -31,17 +50,6 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.SerializerOptions.Converters.Add(
         new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-});
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("PrivateFrontend", policy =>
-    {
-        policy
-            .WithOrigins(settings.FrontendOrigin)
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
 });
 
 var connectionString =
@@ -82,10 +90,7 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
-if (args.Any(x => string.Equals(
-        x,
-        "--run-once",
-        StringComparison.OrdinalIgnoreCase)))
+if (runOnce)
 {
     using var scope = app.Services.CreateScope();
     var orchestrator = scope.ServiceProvider
@@ -118,10 +123,27 @@ if (args.Any(x => string.Equals(
     return;
 }
 
-app.UseCors("PrivateFrontend");
+app.UseMiddleware<PrivateApiTokenMiddleware>();
 app.MapPrivateApi();
 
 Console.WriteLine($"PriceWatch.Private listening on {settings.ListenUrl}");
-Console.WriteLine("This API is intended for localhost/private use only.");
+Console.WriteLine("This API is restricted to loopback and requires local proxy authentication.");
 
 await app.RunAsync();
+
+static bool IsLoopbackUrl(string value)
+{
+    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+        (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+    {
+        return false;
+    }
+
+    if (string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    return IPAddress.TryParse(uri.Host, out var address) &&
+        IPAddress.IsLoopback(address);
+}

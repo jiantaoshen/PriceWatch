@@ -118,45 +118,89 @@ function buildWebEnv(source, part) {
   return env;
 }
 
-function buildPrivateEnv(source, part) {
-  const env = { ...source };
+function buildPrivateEnvs(source, part) {
   const apiUrl = source.PRIVATE_API_URL || "http://127.0.0.1:5188";
-  const frontendUrl = source.PRIVATE_FRONTEND_URL || "http://localhost:3001";
+  const frontendUrl = source.PRIVATE_FRONTEND_URL || "http://127.0.0.1:3001";
   const cloudUrl = source.WEB_FRONTEND_URL || "http://localhost:3000";
+  const apiToken = String(source.PRIVATE_API_TOKEN || "").trim();
+
+  if (!apiToken || apiToken.length < 32) {
+    console.error("Missing or weak private API token in .env.local.");
+    console.error("Set PRIVATE_API_TOKEN to at least 32 characters.");
+    process.exit(1);
+  }
+
+  const backendEnv = { ...process.env };
+  const frontendEnv = { ...process.env };
+
+  for (const key of [
+    "DATABASE_CONNECTION_STRING",
+    "ConnectionStrings__Database",
+    "OWNER_SUB",
+    "OWNER_OID",
+    "API_MICROSOFT_CLIENT_ID",
+    "API_MICROSOFT_TENANT",
+    "AzureAd__ClientId",
+    "AzureAd__TenantId",
+  ]) {
+    delete frontendEnv[key];
+  }
 
   if (part !== "frontend") {
     requireValues(source, ["DATABASE_CONNECTION_STRING"], "private backend");
+
+    assignIfPresent(
+      backendEnv,
+      "ConnectionStrings__Database",
+      source.DATABASE_CONNECTION_STRING
+    );
+    assignIfPresent(backendEnv, "Private__ListenUrl", apiUrl);
+    assignIfPresent(backendEnv, "Private__ApiToken", apiToken);
+    assignIfPresent(
+      backendEnv,
+      "Private__PythonScript",
+      source.PRIVATE_PYTHON_SCRIPT
+    );
+    assignIfPresent(backendEnv, "Private__Headless", source.PRIVATE_HEADLESS);
+    assignIfPresent(
+      backendEnv,
+      "Private__SuspiciousChangeRatio",
+      source.PRIVATE_SUSPICIOUS_CHANGE_RATIO
+    );
+
+    if (source.PRIVATE_PYTHON_EXECUTABLE) {
+      const pythonExecutable = source.PRIVATE_PYTHON_EXECUTABLE;
+      const looksLikePath =
+        pythonExecutable.startsWith(".") ||
+        pythonExecutable.includes("/") ||
+        pythonExecutable.includes("\\");
+
+      backendEnv.Private__PythonExecutable = looksLikePath
+        ? path.resolve(repoRoot, pythonExecutable)
+        : pythonExecutable;
+    }
+
+    backendEnv.ASPNETCORE_ENVIRONMENT =
+      source.ASPNETCORE_ENVIRONMENT || "Development";
+    backendEnv.ASPNETCORE_URLS = apiUrl;
   }
 
-  assignIfPresent(env, "ConnectionStrings__Database", source.DATABASE_CONNECTION_STRING);
-  assignIfPresent(env, "Private__ListenUrl", apiUrl);
-  assignIfPresent(env, "Private__FrontendOrigin", frontendUrl);
-  assignIfPresent(env, "Private__PythonScript", source.PRIVATE_PYTHON_SCRIPT);
-  assignIfPresent(env, "Private__Headless", source.PRIVATE_HEADLESS);
-  assignIfPresent(
-    env,
-    "Private__SuspiciousChangeRatio",
-    source.PRIVATE_SUSPICIOUS_CHANGE_RATIO
-  );
-
-  if (source.PRIVATE_PYTHON_EXECUTABLE) {
-    const pythonExecutable = source.PRIVATE_PYTHON_EXECUTABLE;
-    const looksLikePath =
-      pythonExecutable.startsWith(".") ||
-      pythonExecutable.includes("/") ||
-      pythonExecutable.includes("\\");
-
-    env.Private__PythonExecutable = looksLikePath
-      ? path.resolve(repoRoot, pythonExecutable)
-      : pythonExecutable;
+  if (part !== "backend") {
+    // Only pass the private proxy configuration to the Next.js server.
+    // Database credentials and other backend-only values from .env.local are
+    // intentionally not copied into the frontend process environment.
+    frontendEnv.PRIVATE_API_URL = apiUrl;
+    frontendEnv.PRIVATE_FRONTEND_URL = frontendUrl;
+    frontendEnv.PRIVATE_API_TOKEN = apiToken;
+    frontendEnv.NEXT_PUBLIC_CLOUD_URL = cloudUrl;
   }
 
-  env.ASPNETCORE_ENVIRONMENT = source.ASPNETCORE_ENVIRONMENT || "Development";
-  env.ASPNETCORE_URLS = apiUrl;
-  env.NEXT_PUBLIC_PRIVATE_API_URL = apiUrl;
-  env.NEXT_PUBLIC_CLOUD_URL = cloudUrl;
-
-  return env;
+  return {
+    apiUrl,
+    frontendUrl,
+    backendEnv,
+    frontendEnv,
+  };
 }
 
 const children = new Set();
@@ -297,16 +341,21 @@ if (target === "web") {
     }
   }
 } else {
-  const env = buildPrivateEnv(sourceEnv, part);
+  const {
+    apiUrl,
+    frontendUrl,
+    backendEnv,
+    frontendEnv,
+  } = buildPrivateEnvs(sourceEnv, part);
 
   console.log("PriceWatch private local development");
-  console.log(`  frontend: ${env.PRIVATE_FRONTEND_URL || "http://localhost:3001"}`);
-  console.log(`  api:      ${env.PRIVATE_API_URL || "http://127.0.0.1:5188"}`);
+  console.log(`  frontend: ${frontendUrl}`);
+  console.log(`  api:      ${apiUrl}`);
 
   if (part !== "frontend") {
-    startBackend("src/PriceWatch.Private", env, "private-api");
+    startBackend("src/PriceWatch.Private", backendEnv, "private-api");
   }
   if (part !== "backend") {
-    startFrontend("pricewatch-private-web", env, "private-web");
+    startFrontend("pricewatch-private-web", frontendEnv, "private-web");
   }
 }

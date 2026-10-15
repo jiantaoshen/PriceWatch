@@ -4,7 +4,7 @@ public sealed class PrivateSettings
 {
     public string ListenUrl { get; set; } = "http://127.0.0.1:5188";
 
-    public string FrontendOrigin { get; set; } = "http://localhost:3001";
+    public string ApiToken { get; set; } = string.Empty;
 
     public string PythonExecutable { get; set; } = "python";
 
