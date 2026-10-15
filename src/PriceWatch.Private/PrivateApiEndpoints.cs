@@ -58,17 +58,17 @@ public static class PrivateApiEndpoints
                 return Results.Ok(
                     await schedule.ApplyAsync(request));
             }
-            catch (ArgumentException exception)
+            catch (ArgumentException)
             {
                 return Results.BadRequest(new
                 {
-                    error = exception.Message
+                    error = "Invalid schedule configuration."
                 });
             }
-            catch (PlatformNotSupportedException exception)
+            catch (PlatformNotSupportedException)
             {
                 return Results.Problem(
-                    detail: exception.Message,
+                    detail: "Windows Task Scheduler is only supported on Windows.",
                     statusCode: StatusCodes.Status501NotImplemented);
             }
         });

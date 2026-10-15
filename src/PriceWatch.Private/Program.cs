@@ -1,15 +1,20 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using PriceWatch.Core.Services;
 using PriceWatch.Data;
 using PriceWatch.Private;
+using PriceWatch.Private.Infrastructure;
 using PriceWatch.Private.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Load user-secrets even for --run-once executions started by Task Scheduler.
 builder.Configuration.AddUserSecrets<Program>(optional: true);
+
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 builder.Services.Configure<PrivateSettings>(
     builder.Configuration.GetSection("Private"));
@@ -39,13 +44,25 @@ builder.Services.AddCors(options =>
     });
 });
 
+var connectionString =
+    builder.Configuration.GetConnectionString("Database")
+    ?? throw new InvalidOperationException(
+        "Database connection string is missing.");
+
+try
+{
+    _ = new NpgsqlConnectionStringBuilder(connectionString);
+}
+catch
+{
+    // Do not preserve the provider exception as an inner exception. Npgsql may
+    // include the original connection string in its exception message.
+    throw new InvalidOperationException(
+        "Database connection string is invalid.");
+}
+
 builder.Services.AddDbContext<PriceWatchDbContext>(options =>
 {
-    var connectionString = builder.Configuration
-        .GetConnectionString("Database")
-        ?? throw new InvalidOperationException(
-            "ConnectionStrings:Database is missing. Set it with dotnet user-secrets for PriceWatch.Private.");
-
     options
         .UseNpgsql(connectionString)
         .UseSnakeCaseNamingConvention();
@@ -63,6 +80,8 @@ builder.Services.AddSingleton<WindowsScheduleService>();
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+
 if (args.Any(x => string.Equals(
         x,
         "--run-once",
@@ -72,8 +91,30 @@ if (args.Any(x => string.Equals(
     var orchestrator = scope.ServiceProvider
         .GetRequiredService<ScrapeOrchestrator>();
 
-    var runId = await orchestrator.RunOnceAsync();
-    Console.WriteLine($"PriceWatch run completed: {runId}");
+    try
+    {
+        var runId = await orchestrator.RunOnceAsync();
+        Console.WriteLine($"PriceWatch run completed: {runId}");
+    }
+    catch (Exception exception)
+    {
+        var errorId = Guid.NewGuid();
+        var logger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("PriceWatch.Private.RunOnce");
+
+        logger.LogError(
+            "Scheduled scrape run failed. ErrorId={ErrorId}, Type={ExceptionType}, StackTrace={StackTrace}",
+            errorId,
+            exception.GetType().FullName,
+            exception.StackTrace);
+
+        Console.Error.WriteLine(
+            $"PriceWatch run failed. Error ID: {errorId}");
+
+        Environment.ExitCode = 1;
+    }
+
     return;
 }
 

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using PriceWatch.Private.Infrastructure;
 using PriceWatch.Private.Models;
 
 namespace PriceWatch.Private.Services;
@@ -112,14 +113,16 @@ public sealed class PythonScraperClient
                          Environment.NewLine,
                          StringSplitOptions.RemoveEmptyEntries))
             {
-                _logger.LogInformation("[PYTHON] {Line}", line);
+                _logger.LogInformation(
+                    "[PYTHON] {Line}",
+                    SensitiveDataRedactor.Redact(line));
             }
         }
 
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"Python scraper exited with code {process.ExitCode}. {stderr}".Trim());
+                $"Python scraper exited with code {process.ExitCode}.");
         }
 
         var response = JsonSerializer.Deserialize<ScrapeBatchResponse>(

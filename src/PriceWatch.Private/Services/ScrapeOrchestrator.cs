@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PriceWatch.Core.Services;
 using PriceWatch.Data;
 using PriceWatch.Data.Entities;
+using PriceWatch.Private.Infrastructure;
 using PriceWatch.Private.Models;
 
 namespace PriceWatch.Private.Services;
@@ -88,9 +89,13 @@ public sealed class ScrapeOrchestrator
             }
             catch (Exception exception)
             {
+                var errorId = Guid.NewGuid();
+
                 _logger.LogError(
-                    exception,
-                    "Python batch failed. Every automatic source in this run will be recorded as failed.");
+                    "Python batch failed. ErrorId={ErrorId}, Type={ExceptionType}, StackTrace={StackTrace}",
+                    errorId,
+                    exception.GetType().FullName,
+                    exception.StackTrace);
 
                 workerResults = jobs
                     .Select(job => new ScrapeWorkerResult
@@ -98,7 +103,8 @@ public sealed class ScrapeOrchestrator
                         ItemId = job.ItemId,
                         SourceId = job.SourceId,
                         Ok = false,
-                        Error = exception.Message
+                        Error =
+                            $"Scraper worker failed. Error ID: {errorId}"
                     })
                     .ToList();
             }
@@ -160,7 +166,9 @@ public sealed class ScrapeOrchestrator
                             SourceId = source.Id,
                             ResultStatus = ScrapeResultStatus.Failed,
                             ReviewStatus = ReviewStatus.Pending,
-                            Error = workerResult?.Error ?? "Python scraper returned no result.",
+                            Error = workerResult?.Error is { } workerError
+                                ? SensitiveDataRedactor.Redact(workerError)
+                                : "Python scraper returned no result.",
                             CreatedAt = createdAt
                         });
 

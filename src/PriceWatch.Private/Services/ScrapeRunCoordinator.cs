@@ -72,11 +72,18 @@ public sealed class ScrapeRunCoordinator
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Private scrape run failed.");
+            var errorId = Guid.NewGuid();
+
+            _logger.LogError(
+                "Private scrape run failed. ErrorId={ErrorId}, Type={ExceptionType}, StackTrace={StackTrace}",
+                errorId,
+                exception.GetType().FullName,
+                exception.StackTrace);
 
             lock (_gate)
             {
-                _lastError = exception.Message;
+                _lastError =
+                    $"Scrape run failed. Error ID: {errorId}";
             }
         }
     }
