@@ -18,7 +18,8 @@ public enum ScrapeRunStatus
     Running,
     Success,
     Partial,
-    Failed
+    Failed,
+    Abandoned
 }
 
 public enum ScrapeResultStatus

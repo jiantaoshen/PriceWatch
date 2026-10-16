@@ -1,49 +1,77 @@
+const DEFAULT_PRIVATE_API_URL = "http://127.0.0.1:5188";
+const DEFAULT_PRIVATE_FRONTEND_URL = "http://127.0.0.1:3001";
 const CLIENT_HEADER = "X-PriceWatch-Client";
 const CLIENT_HEADER_VALUE = "private-web";
 const TOKEN_HEADER = "X-PriceWatch-Token";
+const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-const MUTATION_METHODS = new Set([
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-]);
-
-type RouteContext = {
-  params: Promise<{
-    path: string[];
-  }>;
-};
-
-function getRequiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(`${name} is not configured.`);
-  }
-
-  return value;
+function problem(status: number, title: string) {
+  return Response.json(
+    { status, title },
+    {
+      status,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    }
+  );
 }
 
-function normalizeOrigin(value: string): string {
-  const url = new URL(value);
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname
+    .replace(/^\[/, "")
+    .replace(/\]$/, "")
+    .toLowerCase();
 
-  return url.origin;
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1"
+  );
+}
+
+function readProxyConfig() {
+  const apiUrl = new URL(
+    process.env.PRIVATE_API_URL ?? DEFAULT_PRIVATE_API_URL
+  );
+  const frontendUrl = new URL(
+    process.env.PRIVATE_FRONTEND_URL ?? DEFAULT_PRIVATE_FRONTEND_URL
+  );
+  const token = process.env.PRIVATE_API_TOKEN;
+
+  if (
+    !["http:", "https:"].includes(apiUrl.protocol) ||
+    !isLoopbackHostname(apiUrl.hostname)
+  ) {
+    throw new Error("Private API upstream must use a loopback host.");
+  }
+
+  if (
+    !["http:", "https:"].includes(frontendUrl.protocol) ||
+    !isLoopbackHostname(frontendUrl.hostname)
+  ) {
+    throw new Error("Private frontend must use a loopback host.");
+  }
+
+  if (!token || token.length < 32) {
+    throw new Error("Private API token is not configured.");
+  }
+
+  return {
+    apiUrl,
+    frontendUrl,
+    token,
+  };
 }
 
 function isTrustedBrowserRequest(
   request: Request,
-  frontendOrigin: string,
-): boolean {
-  const expectedFrontend = new URL(frontendOrigin);
-  const host = request.headers.get("host");
-
-  // The request must be sent to the configured local frontend.
-  if (host !== expectedFrontend.host) {
+  frontendUrl: URL
+) {
+  if (request.headers.get("host") !== frontendUrl.host) {
     return false;
   }
 
-  // Requests from private-web's API client include this marker.
   if (
     request.headers.get(CLIENT_HEADER) !==
     CLIENT_HEADER_VALUE
@@ -51,222 +79,104 @@ function isTrustedBrowserRequest(
     return false;
   }
 
-  // Read-only requests do not require Origin validation.
   if (!MUTATION_METHODS.has(request.method)) {
     return true;
   }
 
-  // Browser write requests must be same-origin.
   const origin = request.headers.get("origin");
-
   if (origin) {
     try {
-      return normalizeOrigin(origin) === frontendOrigin;
+      return new URL(origin).origin === frontendUrl.origin;
     } catch {
       return false;
     }
   }
 
-  // Fallback for browsers that omit Origin.
-  return (
-    request.headers.get("sec-fetch-site") ===
-    "same-origin"
-  );
+  return request.headers.get("sec-fetch-site") === "same-origin";
 }
 
-function buildTargetUrl(
-  request: Request,
-  apiBaseUrl: string,
-  path: string[],
-): URL {
+async function proxy(request: Request) {
+  let config: ReturnType<typeof readProxyConfig>;
+
+  try {
+    config = readProxyConfig();
+  } catch {
+    return problem(500, "Private API proxy is not configured.");
+  }
+
+  if (!isTrustedBrowserRequest(request, config.frontendUrl)) {
+    return problem(403, "Forbidden");
+  }
+
   const incomingUrl = new URL(request.url);
-
-  const encodedPath = path
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-  const targetUrl = new URL(
-    `/api/private/${encodedPath}`,
-    apiBaseUrl,
+  const upstreamUrl = new URL(
+    `${incomingUrl.pathname}${incomingUrl.search}`,
+    config.apiUrl
   );
 
-  targetUrl.search = incomingUrl.search;
-
-  return targetUrl;
-}
-
-function buildProxyHeaders(
-  request: Request,
-  token: string,
-): Headers {
   const headers = new Headers();
-
   const accept = request.headers.get("accept");
   const contentType = request.headers.get("content-type");
 
   if (accept) {
     headers.set("accept", accept);
   }
-
   if (contentType) {
     headers.set("content-type", contentType);
   }
 
-  headers.set(TOKEN_HEADER, token);
-
-  return headers;
-}
-
-function buildResponseHeaders(
-  response: Response,
-): Headers {
-  const headers = new Headers();
-
-  const contentType = response.headers.get("content-type");
-  const cacheControl = response.headers.get("cache-control");
-
-  if (contentType) {
-    headers.set("content-type", contentType);
-  }
-
-  if (cacheControl) {
-    headers.set("cache-control", cacheControl);
-  }
-
-  return headers;
-}
-
-async function proxyRequest(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
-  const frontendOrigin = normalizeOrigin(
-    getRequiredEnv("PRIVATE_FRONTEND_URL"),
-  );
-
-  const apiBaseUrl = normalizeOrigin(
-    getRequiredEnv("PRIVATE_API_URL"),
-  );
-
-  const token = getRequiredEnv("PRIVATE_API_TOKEN");
-
-  if (!isTrustedBrowserRequest(request, frontendOrigin)) {
-    return Response.json(
-      {
-        error: "Forbidden",
-      },
-      {
-        status: 403,
-      },
-    );
-  }
-
-  const { path } = await context.params;
-
-  if (!path?.length) {
-    return Response.json(
-      {
-        error: "Invalid private API path.",
-      },
-      {
-        status: 400,
-      },
-    );
-  }
-
-  const targetUrl = buildTargetUrl(
-    request,
-    apiBaseUrl,
-    path,
-  );
-
-  const headers = buildProxyHeaders(
-    request,
-    token,
-  );
+  headers.set(TOKEN_HEADER, config.token);
 
   let body: ArrayBuffer | undefined;
-
-  if (
-    request.method !== "GET" &&
-    request.method !== "HEAD"
-  ) {
-    const buffer = await request.arrayBuffer();
-
-    if (buffer.byteLength > 0) {
-      body = buffer;
-    }
+  if (!["GET", "HEAD"].includes(request.method)) {
+    const requestBody = await request.arrayBuffer();
+    body = requestBody.byteLength > 0 ? requestBody : undefined;
   }
 
   try {
-    const upstreamResponse = await fetch(targetUrl, {
+    const upstreamResponse = await fetch(upstreamUrl, {
       method: request.method,
       headers,
       body,
       cache: "no-store",
       redirect: "manual",
+      signal: request.signal,
     });
 
-    const responseBody =
-      await upstreamResponse.arrayBuffer();
+    const responseHeaders = new Headers({
+      "Cache-Control": "no-store",
+    });
+    const upstreamContentType = upstreamResponse.headers.get("content-type");
 
-    return new Response(responseBody, {
+    if (upstreamContentType) {
+      responseHeaders.set("content-type", upstreamContentType);
+    }
+
+    return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
-      statusText: upstreamResponse.statusText,
-      headers: buildResponseHeaders(
-        upstreamResponse,
-      ),
+      headers: responseHeaders,
     });
   } catch {
-    return Response.json(
-      {
-        error: "Private API is unavailable.",
-      },
-      {
-        status: 502,
-      },
-    );
+    return problem(502, "Private API is unavailable.");
   }
 }
 
-export async function GET(
-  request: Request,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
+export function GET(request: Request) {
+  return proxy(request);
 }
 
-export async function POST(
-  request: Request,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
+export function POST(request: Request) {
+  return proxy(request);
 }
 
-export async function PUT(
-  request: Request,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
+export function PUT(request: Request) {
+  return proxy(request);
 }
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
+export function PATCH(request: Request) {
+  return proxy(request);
 }
 
-export async function DELETE(
-  request: Request,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
-}
-
-export async function HEAD(
-  request: Request,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
+export function DELETE(request: Request) {
+  return proxy(request);
 }

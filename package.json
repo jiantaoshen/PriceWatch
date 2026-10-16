@@ -14,6 +14,7 @@
     "lint:web": "npm run lint --workspace=web",
     "lint:private": "npm run lint --workspace=pricewatch-private-web",
     "lint": "npm run lint:web && npm run lint:private",
+    "test:dotnet": "dotnet test PriceWatch.slnx",
     "dev:web:api": "node scripts/dev-stack.mjs web backend",
     "dev:web:all": "node scripts/dev-stack.mjs web all",
     "dev:private:api": "node scripts/dev-stack.mjs private backend",

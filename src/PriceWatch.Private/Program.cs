@@ -79,6 +79,7 @@ builder.Services.AddScoped<PythonScraperClient>();
 builder.Services.AddScoped<PriceValidationService>();
 builder.Services.AddScoped<OfferSelectionService>();
 builder.Services.AddScoped<ScrapeOrchestrator>();
+builder.Services.AddScoped<ScrapeRunRecoveryService>();
 
 builder.Services.AddSingleton<PostgreSqlScrapeLock>();
 builder.Services.AddSingleton<ScrapeRunCoordinator>();
@@ -115,8 +116,13 @@ if (runOnce)
         }
 
         using var scope = app.Services.CreateScope();
+        var recovery = scope.ServiceProvider
+            .GetRequiredService<ScrapeRunRecoveryService>();
         var orchestrator = scope.ServiceProvider
             .GetRequiredService<ScrapeOrchestrator>();
+
+        await recovery.RecoverAbandonedRunsAsync(
+            DateTimeOffset.UtcNow);
 
         var runId = await orchestrator.RunOnceAsync(
             ScrapeTrigger.Scheduled);

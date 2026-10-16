@@ -1,6 +1,6 @@
 export type RunSummary = {
   id: string;
-  status: "running" | "success" | "partial" | "failed";
+  status: "running" | "success" | "partial" | "failed" | "abandoned";
   startedAt: string;
   finishedAt: string | null;
   totalItems: number;

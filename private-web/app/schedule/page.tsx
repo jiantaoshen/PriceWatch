@@ -79,7 +79,7 @@ export default function SchedulePage() {
             <AlertDescription>
               <div>Task: {schedule?.taskExists ? "installed" : "not installed"}</div>
               <div className="mt-1">
-                Item check intervals are minimum intervals. The Windows task is the evaluation cadence, so an item cannot run more often than this task itself.
+                Item check intervals are minimum intervals. The Windows task is the evaluation cadence, so an item cannot run more often than the task itself. Run now ignores item intervals.
               </div>
             </AlertDescription>
           </Alert>

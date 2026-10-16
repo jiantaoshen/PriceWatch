@@ -100,8 +100,13 @@ public sealed class ScrapeRunCoordinator
             try
             {
                 using var scope = _scopeFactory.CreateScope();
+                var recovery = scope.ServiceProvider
+                    .GetRequiredService<ScrapeRunRecoveryService>();
                 var orchestrator = scope.ServiceProvider
                     .GetRequiredService<ScrapeOrchestrator>();
+
+                await recovery.RecoverAbandonedRunsAsync(
+                    DateTimeOffset.UtcNow);
 
                 var runId = await orchestrator.RunOnceAsync(ScrapeTrigger.OnDemand);
 

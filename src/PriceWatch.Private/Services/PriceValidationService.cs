@@ -95,11 +95,14 @@ public sealed class PriceValidationService
 
         if (
             !previousUnitPrice.HasValue &&
-            item.CurrentSourceId == source.Id &&
             item.CurrentPrice.HasValue &&
             item.CurrentQuantity.HasValue &&
             item.CurrentQuantity.Value > 0)
         {
+            // A source with no accepted history still has a useful baseline
+            // when this item already has an accepted current offer from another
+            // source. This reduces the chance that a wildly incorrect first
+            // observation is accepted only because the source itself is new.
             previousUnitPrice =
                 item.CurrentPrice.Value /
                 item.CurrentQuantity.Value;

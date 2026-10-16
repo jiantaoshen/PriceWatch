@@ -1,565 +1,344 @@
-# DESIGN.md
-
 # PriceWatch System Design
 
 ## 1. Overview
 
-PriceWatch is a price-tracking system that separates public administration from local scraping execution.
-
-The system allows a user to:
-
-- create and manage tracked products,
-- define one or more sources for each product,
-- enable or disable scraping per source,
-- run scraping manually or through Windows Task Scheduler,
-- store scrape results and price history,
-- review suspicious results,
-- automatically select the best accepted offer,
-- and view the latest tracked price through the web UI.
-
-The current design intentionally avoids duplicated state such as `Automatic`, `Manual`, `Hybrid`, or `UpdateMode`.
-
-The authoritative scraping switch is:
+PriceWatch is a price-tracking system with two planes:
 
 ```text
-ItemSource.ScrapingEnabled
-```
-
-The system is split into two execution planes:
-
-```text
-Public / Control Plane
+Control Plane
 - web
 - PriceWatch.WebApi
 
-Private / Execution Plane
+Execution Plane
 - private-web
 - PriceWatch.Private
 - Python Playwright scraper
 - Windows Task Scheduler
 ```
 
-Both planes share PostgreSQL as the source of truth.
+Both planes use Neon PostgreSQL as the shared source of truth.
 
----
+Core rules:
+
+- `ItemSource.ScrapingEnabled` is the only source-level scraping switch.
+- No persisted `Automatic` / `Manual` / `Hybrid` / `UpdateMode`.
+- Only accepted results from the relevant current run may update automatic current price.
+- Suspicious results require review.
+- Only one scrape run executes globally at a time.
+- Private execution remains local-only.
+- Unsafe network targets fail closed.
 
 # 2. Functional Requirements
 
-## 2.1 Product Management
+## 2.1 Products and Sources
 
-The system shall allow the user to:
+The user shall be able to create, edit, archive, and restore products; configure target/comparison values; enable or disable item tracking; and manage multiple sources.
 
-- create a tracked product,
-- edit product metadata,
-- archive or restore a product,
-- define target price information,
-- define comparison quantity / unit information,
-- enable or disable tracking for the whole product.
-
-Each tracked product may contain multiple sources.
-
-## 2.2 Source Management
-
-The system shall allow the user to:
-
-- add a source URL,
-- assign a store / source name,
-- define default quantity,
-- store optional notes,
-- enable or disable scraping for each source.
-
-The authoritative scrape state shall be:
+A source may contain store, URL, default quantity, manual price, note, and:
 
 ```text
 ScrapingEnabled = true  -> Scraping ON
 ScrapingEnabled = false -> Scraping OFF
 ```
 
-The system shall not maintain a separate persisted mode such as `Automatic`, `Manual`, `Hybrid`, or `Mixed` because those concepts are derived from configured sources.
+Do not add a second persisted mode representing the same fact.
 
-## 2.3 Scraping
+## 2.2 Scraping
 
-The system shall support:
+The system shall support on-demand and scheduled scraping.
 
-- on-demand scraping,
-- scheduled scraping,
-- scraping only eligible products,
-- scraping only sources with `ScrapingEnabled = true`,
-- respecting the product tracking state,
-- respecting minimum check intervals.
-
-The scraper shall use Playwright to load external product pages.
-
-Before navigation, and during all browser network requests, the scraper shall enforce SSRF protections.
-
-The scraper shall reject unsafe destinations including:
-
-- localhost,
-- loopback addresses,
-- private networks,
-- link-local ranges,
-- non-public IP addresses,
-- unsafe redirects,
-- unsafe iframe / script / image / XHR / fetch destinations.
-
-## 2.4 Scheduled Execution
-
-The system shall support scheduled execution through Windows Task Scheduler.
-
-The scheduled task shall execute the repository's run-once entry point.
-
-The run-once flow shall:
-
-1. load repository configuration,
-2. start the private execution path,
-3. attempt to acquire the global scrape lock,
-4. skip safely if another scrape is already running,
-5. execute eligible scrape jobs,
-6. persist results,
-7. exit normally.
-
-The scheduler shall not require a browser or frontend to be running.
-
-## 2.5 Scrape Run Tracking
-
-Each scrape execution shall create a `ScrapeRun`.
-
-A run shall track:
-
-- start time,
-- finish time,
-- total items,
-- successful results,
-- failed results,
-- suspicious results,
-- run status.
-
-Each result shall be associated with the run that produced it.
-
-## 2.6 Scrape Result Handling
-
-A scrape result shall contain relevant observations such as:
-
-- scraped price,
-- scraped quantity,
-- calculated unit price,
-- source,
-- item,
-- run,
-- timestamp,
-- result status,
-- review status,
-- suspicious reason.
-
-The system shall preserve the real observation timestamp.
-
-Historical results shall not be treated as fresh observations from a newer run.
-
-## 2.7 Best Offer Selection
-
-The system shall select the current price using accepted results from the relevant run.
-
-For an automatic scrape run:
+Eligible automatic work requires:
 
 ```text
-only accepted results from the current run
--> participate in best-offer selection
+item is tracked
++
+source.ScrapingEnabled = true
 ```
 
-The system shall not reuse an older accepted result as though it were observed in the current run.
+Scheduled runs also respect `CheckIntervalMinutes`.
 
-If multiple accepted offers are available, the system shall select the lowest valid unit price.
+The scraper uses Playwright and execution-time SSRF protection.
 
-The same offer-selection rule shall be used by both automatic scrape processing and manual review processing.
-
-## 2.8 Suspicious Result Review
-
-Suspicious scrape results shall enter a review workflow.
-
-The user shall be able to:
-
-- accept a result,
-- reject a result,
-- provide a manual override where supported.
-
-Accepting or overriding a result shall trigger best-offer recalculation using the shared offer-selection logic.
-
-Reviewing an old historical result shall not overwrite a newer current price.
-
-## 2.9 Reviews UI
-
-The system shall expose Reviews through one canonical UI entry.
-
-The header shall display the pending review count, for example:
+First-observation baseline priority:
 
 ```text
-Reviews 3
+same-source accepted history
+-> current accepted item price
+-> basic sanity validation only
 ```
 
-The Product page shall not duplicate the same pending-review concept as a second filter when that filter adds no independent workflow.
+Target price is not a market-price baseline.
 
-The pending review count should come from a lightweight count endpoint rather than downloading all review rows only to count them.
+## 2.3 Scheduling
 
-## 2.10 Dashboard
+Windows Task Scheduler runs the repository run-once entry point.
 
-The private dashboard shall show local execution information such as:
+Scheduled flow:
 
-- current / latest run state,
-- pending reviews,
-- scraping availability,
-- scheduling state,
-- run-now control.
+```text
+load config
+-> acquire global lock
+-> skip if already locked
+-> recover stale Running -> Abandoned
+-> evaluate eligible work
+-> scrape
+-> persist
+-> finish
+```
 
-The private dashboard shall communicate with the private backend only through the Next.js server proxy.
+The frontend is not required.
 
-The browser shall not call the private .NET API directly.
+`CheckIntervalMinutes` is a minimum scheduled interval, not a timer. Actual frequency cannot exceed the Task Scheduler cadence. `Run now` ignores this interval.
 
----
+## 2.4 Runs and Results
+
+Each execution creates a `ScrapeRun`.
+
+Supported states:
+
+```text
+Running
+Success
+Partial
+Failed
+Abandoned
+```
+
+`Abandoned` means a previous process disappeared while the row remained `Running`.
+
+Each `ScrapeResult` keeps the run, item, source when applicable, observed values/time, result status, review status, and sanitized failure/suspicious information.
+
+Historical results must not be treated as new observations.
+
+## 2.5 Best Offer
+
+Automatic current price selection uses only accepted results from the relevant current run.
+
+If multiple accepted offers exist, choose the lowest valid unit price.
+
+The same offer-selection rule is used by normal scraping and review acceptance/override.
+
+Old historical reviews must not overwrite newer current price.
+
+`LastSuccessfulPriceAt` represents observation time.
+
+## 2.6 Reviews
+
+Suspicious results enter Pending review.
+
+Supported actions:
+
+```text
+Accept
+Reject
+Manual Override
+```
+
+Review transitions are atomic and allowed only while `ReviewStatus = Pending`.
+
+Exactly one competing decision may succeed. Later attempts return `409 Conflict`.
+
+Accept/Override recomputes the best offer.
+
+The UI has one canonical Reviews entry with a lightweight pending count in the header.
+
+## 2.7 Private Dashboard
+
+The private dashboard provides:
+
+- latest/local run status,
+- pending review count,
+- run-now control,
+- schedule state,
+- scraping availability.
+
+The browser never calls `PriceWatch.Private` directly; it uses the Next.js server proxy.
+
+## 2.8 Email Price Alerts — Planned
+
+`PriceAlertEvent` is reserved for email price alerts.
+
+When an **accepted automatic observation** has unit price at or below the target unit price, the system shall send email to the configured recipient.
+
+Supported SMTP modes shall include:
+
+```text
+Outlook / Microsoft
+Gmail
+Custom SMTP
+```
+
+Sender and recipient may be the same account.
+
+SMTP credentials remain server-side.
+
+`PriceAlertEvent` provides durable delivery state:
+
+```text
+Pending
+Sent
+Failed
+```
+
+and prevents duplicate alerts for the same accepted `PriceHistory` event.
+
+**Status:** planned; SMTP delivery is not implemented yet.
 
 # 3. Non-Functional Requirements
 
 ## 3.1 Security
 
-Backend exceptions exposed over HTTP shall use sanitized responses such as Problem Details.
+The system shall:
 
-Client responses shall not contain:
+- sanitize HTTP errors and process failures,
+- never expose passwords, tokens, connection strings, raw stack traces, or secret-bearing stderr,
+- keep private API credentials server-side,
+- preserve authentication/authorization boundaries,
+- enforce SSRF checks at execution time,
+- fail closed for unsafe targets.
 
-- raw exception messages,
-- stack traces,
-- connection strings,
-- database passwords,
-- process stderr containing secrets.
+## 3.2 Private API Boundary
 
-Logs shall avoid recording secret-bearing exception messages where possible.
+`PriceWatch.Private` binds only to loopback and requires `X-PriceWatch-Token`.
 
-## 3.2 Private API Isolation
-
-The Private API shall:
-
-- bind only to loopback,
-- not be exposed to the LAN,
-- require a private authentication token,
-- reject direct unauthenticated calls.
-
-The browser shall never receive the private API token.
+Browser path:
 
 ```text
 Browser
-  -> private-web
-  -> same-origin /api/private/*
-  -> Next.js server proxy
-  -> X-PriceWatch-Token
-  -> PriceWatch.Private
+-> private-web /api/private/*
+-> Next.js server proxy
+-> X-PriceWatch-Token
+-> PriceWatch.Private
 ```
 
-The token shall exist only on the server side.
+The proxy validates expected frontend host and client marker; mutation requests also validate `Origin` or `Sec-Fetch-Site`.
 
-## 3.3 Request Trust Validation
+The browser never receives the private token.
 
-The private-web proxy shall validate that incoming requests are intended for the configured local frontend.
+## 3.3 SSRF
 
-Read requests shall validate:
+The scraper validates:
 
-- expected frontend host,
-- private-web client marker.
+```text
+scheme
+hostname
+port
+DNS
+resolved IP ranges
+redirects
+browser subresources
+```
 
-Mutation requests shall additionally validate same-origin intent using `Origin` or `Sec-Fetch-Site` fallback.
+Localhost, loopback, private, link-local, and other non-public targets are blocked.
 
-The proxy shall not rely on fragile full-string comparison against `request.url.origin`.
+## 3.4 Concurrency and Reliability
 
-## 3.4 SSRF Protection
+A PostgreSQL session advisory lock allows only one global scrape run.
 
-SSRF protection shall exist at the execution boundary.
+After acquiring the lock, the process marks stale `Running` rows as `Abandoned` before creating a new run.
 
-The system shall not rely only on URL validation at data-entry time.
+Individual scrape failures shall not corrupt unrelated results.
 
-The scraper shall validate:
+If PostgreSQL is unavailable, the system fails closed.
 
-- scheme,
-- hostname,
-- port,
-- DNS resolution,
-- resolved IP ranges,
-- redirects,
-- subresources.
+## 3.5 Data Integrity
 
-Unsafe targets shall fail closed.
+Database constraints back application validation.
 
-## 3.5 Concurrency Control
+Required invariants include:
 
-Only one scrape execution shall run globally at a time.
+```text
+positive quantities
+non-negative prices where applicable
+positive configured check intervals
+unique non-null (run_id, source_id)
+```
 
-The system shall use a PostgreSQL session advisory lock.
+Derived state should not be persisted unless required for historical truth or query performance.
 
-The lock shall be:
+## 3.6 Maintainability and Performance
 
-- acquired before scraping,
-- held on a dedicated connection,
-- released automatically when the connection closes,
-- shared across scheduler and UI-triggered runs.
+Prefer:
 
-## 3.6 Data Integrity
+```text
+one source of truth
+shared domain rules
+few duplicate components/API fields
+lightweight projections
+simple local infrastructure
+```
 
-The system shall preserve:
-
-- source-to-item ownership,
-- run-to-result relationships,
-- result timestamps,
-- current-run freshness,
-- historical price records,
-- accepted/rejected review state.
-
-Data that can be derived should not be redundantly persisted unless required for historical truth or query performance.
-
-## 3.7 Reliability
-
-A failure in one product scrape shall not corrupt unrelated product data.
-
-A network error, parser error, timeout, or suspicious result shall be recorded as a controlled result state.
-
-The system shall fail safely when:
-
-- external sites are unavailable,
-- the scraper crashes,
-- the private API is unavailable,
-- the database cannot be reached,
-- the global lock cannot be acquired.
-
-## 3.8 Maintainability
-
-The implementation should favor:
-
-- fewer duplicated state variables,
-- fewer duplicated API fields,
-- fewer duplicate components,
-- shared domain rules,
-- simple UI,
-- clear security boundaries.
-
-Each business concept should have one authoritative representation.
-
-## 3.9 Observability
-
-Operational failures should provide a traceable identifier without exposing secrets.
-
-Useful operational data includes:
-
-- trace ID,
-- run ID,
-- result ID,
-- timestamps,
-- sanitized status,
-- failure category.
-
-Sensitive configuration must not be included in user-visible output.
-
-## 3.10 Performance
-
-The system is optimized for a relatively small number of tracked products and sources.
-
-The design should avoid:
-
-- loading all reviews just to count pending ones,
-- unnecessary duplicate API calls,
-- duplicate scraping of the same source,
-- unnecessary browser instances,
-- repeated recalculation when a lightweight projection is sufficient.
-
----
+Operational errors should be traceable without exposing secrets.
 
 # 4. Data & API
 
 ## 4.1 Core Data Model
 
 ### TrackedItem
+Tracked product, tracking state, schedule interval, target/comparison data, current/previous accepted price state, timestamps, archive state.
 
-Represents a tracked product.
-
-Important fields include:
-
-```text
-Id
-Name
-ItemType
-Currency
-TrackingEnabled
-CheckIntervalMinutes
-TargetPrice
-TargetUnitPrice
-ComparisonQuantity
-CurrentPrice
-CurrentQuantity
-CurrentUnitPrice
-CurrentSourceId
-PreviousPrice
-PreviousQuantity
-PreviousUnitPrice
-PreviousSourceId
-LastCheckedAt
-LastSuccessfulPriceAt
-LastPriceChangedAt
-ArchivedAt
-CreatedAt
-UpdatedAt
-```
-
-`UpdateMode` is intentionally not part of the current model.
+`UpdateMode` does not exist.
 
 ### ItemSource
-
-Represents a source from which the product may be observed.
-
-Important fields include:
-
-```text
-Id
-ItemId
-Store
-Url
-DefaultQuantity
-ManualPrice
-ScrapingEnabled
-Note
-CreatedAt
-UpdatedAt
-```
-
-`ScrapingEnabled` is the authoritative source-level scrape switch.
+Source metadata plus `ScrapingEnabled`, the authoritative scrape switch.
 
 ### ScrapeRun
-
-Represents one execution of the scraping pipeline.
-
-```text
-Id
-StartedAt
-FinishedAt
-Status
-TotalItems
-Successful
-Failed
-Suspicious
-```
+One execution with status, timestamps, and aggregate counts.
 
 ### ScrapeResult
-
-Represents one source observation produced during a scrape run.
-
-```text
-Id
-RunId
-ItemId
-SourceId
-ScrapedPrice
-ScrapedQuantity
-ScrapedUnitPrice
-ManualPrice
-ManualQuantity
-ManualUnitPrice
-ResultStatus
-ReviewStatus
-ReviewNote
-ReviewedAt
-SuspiciousReason
-Error
-CreatedAt
-```
+One run observation with item/source, scraped/manual values, result/review status, review metadata, and sanitized error data.
 
 ### PriceHistory
-
-Stores historical accepted price observations.
-
-```text
-Id
-ItemId
-SourceId
-ScrapeResultId
-Price
-Quantity
-UnitPrice
-Origin
-RecordedAt
-```
+Accepted historical observation with item/source/result, price, quantity, unit price, origin, and recorded time.
 
 ### PriceAlertEvent
-
-Represents a recorded price alert event.
-
-```text
-Id
-ItemId
-PriceHistoryId
-UnitPrice
-TargetUnitPrice
-Status
-Error
-SentAt
-CreatedAt
-```
-
-This part of the system is currently less central than scraping and review.
+Durable email-delivery record linked uniquely to the triggering `PriceHistory` event.
 
 ## 4.2 Relationships
 
 ```text
-TrackedItem
-  ├── ItemSource[]
-  ├── PriceHistory[]
-  ├── CurrentSource
-  └── PreviousSource
-
-ScrapeRun
-  └── ScrapeResult[]
-
-ScrapeResult
-  ├── TrackedItem
-  ├── ItemSource
-  └── ScrapeRun
-
-PriceHistory
-  ├── TrackedItem
-  ├── ItemSource
-  └── ScrapeResult
+TrackedItem -> ItemSource[]
+TrackedItem -> PriceHistory[]
+ScrapeRun -> ScrapeResult[]
+ScrapeResult -> TrackedItem / ItemSource / ScrapeRun
+PriceHistory -> TrackedItem / ItemSource / ScrapeResult
+PriceAlertEvent -> TrackedItem / PriceHistory
 ```
 
 ## 4.3 Public Web API
 
 Responsibilities:
 
-- product management,
-- source management,
-- review management,
-- public/admin data operations,
-- authentication / owner authorization.
-
-Example logical endpoints:
-
 ```text
-GET    /api/items
-GET    /api/items/{id}
-POST   /api/items
-PUT    /api/items/{id}
-DELETE /api/items/{id}
-
-GET    /api/reviews
-GET    /api/reviews/pending/count
-POST   /api/reviews/{id}/accept
-POST   /api/reviews/{id}/reject
-POST   /api/reviews/{id}/override
+products
+sources
+reviews
+owner-authenticated administration
 ```
 
-Exact route naming may vary, but the responsibilities remain separate.
+Logical routes include:
+
+```text
+/api/items
+/api/reviews
+/api/reviews/pending/count
+/api/reviews/{id}/accept
+/api/reviews/{id}/reject
+/api/reviews/{id}/override
+```
 
 ## 4.4 Private API
 
 Responsibilities:
 
-- run scraping,
-- return execution dashboard data,
-- manage local scheduling,
-- expose local execution status.
+```text
+dashboard
+run-now
+schedule
+local execution state
+```
 
-Typical logical endpoints:
+Logical routes include:
 
 ```text
 GET  /api/private/dashboard
@@ -568,288 +347,138 @@ GET  /api/private/schedule
 POST /api/private/schedule
 ```
 
-The Private API is not called directly by the browser.
+Browser access is proxy-only.
 
-## 4.5 Private Proxy API
+## 4.5 Scraper Interface
 
-The private Next.js frontend exposes `/api/private/*` as a same-origin proxy.
+`PriceWatch.Private` launches the Python scraper and consumes structured results.
 
-Responsibilities:
+Raw stderr is not returned to users; sensitive values are redacted.
 
-1. validate the browser request,
-2. build the private backend target URL,
-3. attach `X-PriceWatch-Token`,
-4. forward allowed headers/body,
-5. return the upstream response without exposing the token.
+## 4.6 Planned SMTP Interface
 
-## 4.6 Internal Scraper Interface
+Future server-side SMTP configuration contains:
 
-The Private API starts the Python scraper as a process.
+```text
+provider/mode
+host
+port
+TLS mode
+sender/username
+credential
+recipient
+```
 
-The scraper receives the required job data and returns structured execution results.
-
-Raw stderr should not be exposed directly to the client.
-
-Secrets must be redacted from process output.
-
----
+Notifications consume accepted `PriceHistory`, not raw scraper output.
 
 # 5. High-Level Architecture
 
-## 5.1 Component View
-
 ```text
-                    ┌──────────────────────────┐
-                    │          User            │
-                    └────────────┬─────────────┘
-                                 │
-                ┌────────────────┴────────────────┐
-                │                                 │
-                ▼                                 ▼
-      ┌───────────────────┐             ┌───────────────────┐
-      │   Public Web      │             │   Private Web     │
-      │     Next.js       │             │     Next.js       │
-      │                   │             │ 127.0.0.1:3001    │
-      └─────────┬─────────┘             └─────────┬─────────┘
-                │                                 │
-                │                                 │ /api/private/*
-                ▼                                 ▼
-      ┌───────────────────┐             ┌───────────────────┐
-      │ PriceWatch.WebApi │             │ Next.js Proxy     │
-      │    ASP.NET Core   │             │ server-side token │
-      └─────────┬─────────┘             └─────────┬─────────┘
-                │                                 │
-                │                                 ▼
-                │                       ┌───────────────────┐
-                │                       │ PriceWatch.Private│
-                │                       │    ASP.NET Core   │
-                │                       │ 127.0.0.1:5188    │
-                │                       └─────────┬─────────┘
-                │                                 │
-                │                    ┌────────────┼────────────┐
-                │                    │            │            │
-                ▼                    ▼            ▼            ▼
-      ┌───────────────────┐   ┌────────────┐ ┌──────────┐ ┌──────────────┐
-      │ Neon PostgreSQL   │   │ PG Global  │ │ Python   │ │ Task         │
-      │ Source of Truth   │   │ Advisory   │ │ Scraper  │ │ Scheduler    │
-      │                   │   │ Lock       │ │Playwright│ │ run-once     │
-      └───────────────────┘   └────────────┘ └────┬─────┘ └──────────────┘
-                                                  │
-                                                  ▼
-                                         ┌───────────────────┐
-                                         │ Public Websites   │
-                                         │ Product Sources   │
-                                         └───────────────────┘
+                 User
+           ┌──────┴──────┐
+           ▼             ▼
+      Public Web     Private Web
+        Next.js        Next.js
+           │             │
+           ▼             ▼
+        WebApi       Server Proxy
+       ASP.NET            │
+           │              ▼
+           │         Private API
+           │          ASP.NET
+           │              │
+           │       ┌──────┼────────┐
+           ▼       ▼      ▼        ▼
+        Neon PG  PG Lock Python   Task
+                        Scraper  Scheduler
+                           │
+                           ▼
+                    Public Websites
 ```
 
-## 5.2 Control Plane
-
-The public control plane consists of:
+Control plane:
 
 ```text
-web
-+
-PriceWatch.WebApi
+web + PriceWatch.WebApi
 ```
 
-Responsibilities:
-
-- product configuration,
-- source configuration,
-- review workflow,
-- administrative UI,
-- authenticated user operations.
-
-## 5.3 Execution Plane
-
-The private execution plane consists of:
+Execution plane:
 
 ```text
-private-web
-+
-PriceWatch.Private
-+
-Python scraper
-+
-Windows Task Scheduler
+private-web + PriceWatch.Private + Python scraper + Task Scheduler
 ```
 
-Responsibilities:
+Execution is local-only. Neon PostgreSQL is the shared data plane.
 
-- local execution,
-- browser automation,
-- scheduling,
-- run-now,
-- operational dashboard.
+Planned notification path:
 
-The execution plane is intentionally local-only.
-
-## 5.4 Shared Data Plane
-
-Both public and private services use Neon PostgreSQL as the common source of truth.
-
-This avoids maintaining separate public/private databases or synchronization pipelines.
-
----
+```text
+Accepted automatic PriceHistory
+-> target comparison
+-> PriceAlertEvent
+-> server-side SMTP
+```
 
 # 6. Main Workflows
 
-## 6.1 Scrape Workflow
+## 6.1 Scrape
 
 ```text
 User / Scheduler
-    ↓
-Run request
-    ↓
-PriceWatch.Private
-    ↓
-Acquire PostgreSQL advisory lock
-    ↓
-Select eligible tracked items
-    ↓
-Select ScrapingEnabled sources
-    ↓
-Check interval eligibility
-    ↓
-Create ScrapeRun
-    ↓
-Invoke Python scraper
-    ↓
-SSRF guard
-    ↓
-Playwright navigation
-    ↓
-Parse price / quantity
-    ↓
-Persist ScrapeResult
-    ↓
-Suspicious?
- ┌──┴───┐
- │      │
-Yes     No
- │      │
-Review  Acceptable result
- │      │
- └──┬───┘
-    ↓
-Best-offer selection
-    ↓
-Update current price / history
-    ↓
-Finish ScrapeRun
-    ↓
-Release advisory lock
+-> Private API
+-> acquire advisory lock
+-> recover Running -> Abandoned
+-> select eligible item/source work
+-> apply schedule interval when applicable
+-> create ScrapeRun
+-> Python + Playwright + SSRF guard
+-> persist ScrapeResult
+-> review suspicious results
+-> choose best accepted current-run offer
+-> update PriceHistory/current price
+-> planned email check
+-> finish run
+-> release lock
 ```
 
-## 6.2 Review Workflow
+## 6.2 Review
 
 ```text
-Pending suspicious result
-    ↓
-Reviews UI
-    ↓
-Accept / Reject / Override
-    ↓
-Update review state
-    ↓
-If accepted/overridden:
-recompute valid offers for relevant run
-    ↓
-Apply best offer
-    ↓
-Update history/current price if appropriate
-    ↓
-Refresh pending review count
+Pending result
+-> Accept / Reject / Override
+-> atomic Pending-only transition
+-> 409 if already reviewed
+-> recompute best offer when accepted/overridden
+-> update current/history only when valid
 ```
-
-## 6.3 Private Proxy Workflow
-
-```text
-Browser
-    ↓
-private-web /api/private/*
-    ↓
-Validate Host
-    ↓
-Validate client marker
-    ↓
-For mutation:
-validate Origin / Sec-Fetch-Site
-    ↓
-Attach server-only token
-    ↓
-127.0.0.1:5188
-    ↓
-Private API token validation
-    ↓
-Endpoint execution
-```
-
----
 
 # 7. Bottlenecks, Scale, and Reliability
 
-## 7.1 Current Scale Assumption
+## 7.1 Scale Assumption
 
-The current architecture is appropriate for:
-
-- one primary user,
-- relatively small numbers of tracked products,
-- relatively small numbers of sources per product,
-- periodic scraping rather than continuous high-frequency crawling.
-
-It is not designed as a high-throughput distributed crawler.
-
-## 7.2 Global Scrape Lock
-
-The PostgreSQL advisory lock intentionally serializes scrape runs.
+Current target:
 
 ```text
-one active scrape run globally
+one primary user
+small-to-moderate product/source count
+periodic scraping
+one local execution environment
 ```
 
-Advantages:
+This is not a distributed high-throughput crawler.
 
-- prevents duplicate runs,
-- prevents conflicting writes,
-- works across scheduler and UI,
-- does not require Redis or another coordination system.
+## 7.2 Main Bottlenecks
 
-Bottleneck:
+### Global serialization
+Only one scrape run executes globally. This is intentional for current scale.
 
-```text
-maximum scrape-run concurrency = 1
-```
+If runtime becomes unacceptable, prefer bounded concurrency rather than removing coordination.
 
-This is acceptable for the current scale.
+### Browser automation
+Latency mainly comes from external websites, JavaScript-heavy pages, timeouts, and anti-bot behavior.
 
-If scrape duration becomes too long, this is likely the first major scaling limit.
-
-## 7.3 Browser Automation Throughput
-
-The Python scraper favors controlled execution over high concurrency.
-
-Potential bottlenecks:
-
-- page load latency,
-- slow external websites,
-- browser startup,
-- JavaScript-heavy pages,
-- network timeouts.
-
-A future scaling strategy should prefer a bounded worker pool rather than unlimited parallelism.
-
-Any future concurrency must preserve:
-
-- per-source isolation,
-- SSRF enforcement,
-- rate limiting,
-- database consistency,
-- external-site friendliness.
-
-## 7.4 Database Growth
-
-As history grows, the main growth tables are expected to be:
+### Database growth
+Main growth tables:
 
 ```text
 scrape_results
@@ -857,184 +486,40 @@ price_history
 scrape_runs
 ```
 
-Likely future requirements:
+Future scale may require additional indexes, pagination, latest-per-source queries, and retention/archive policies.
 
-- targeted indexes,
-- pagination,
-- latest-per-source queries,
-- retention strategy,
-- archival strategy.
+## 7.3 External Dependencies
 
-The application should avoid loading full history when only the latest observation is required.
+PostgreSQL is required for data, coordination, run state, reviews, and history. If unavailable, fail closed.
 
-## 7.5 Reviews Count
+Windows Task Scheduler is local-machine infrastructure; actual scheduled frequency cannot exceed its cadence.
 
-The header pending-review counter should remain a lightweight query.
+Third-party sites may fail because of HTML changes, rate limits, anti-bot controls, redirects, outages, login, or geography. These are controlled operational failures, not application crashes.
 
-Avoid:
+## 7.4 Known Limitations
 
-```text
-load all reviews
--> count in browser
-```
+1. Email alerts are planned; SMTP delivery is not implemented.
+2. First-ever observations without an accepted baseline receive only sanity validation.
+3. SSRF DNS protection retains a theoretical DNS TOCTOU window.
+4. Browser scraping throughput is intentionally limited.
+5. Scheduling is local-machine infrastructure.
+6. Large historical datasets will eventually need query/index/retention tuning.
 
-Prefer:
+# 8. Design Baseline
 
-```text
-COUNT pending reviews
-```
-
-## 7.6 External Website Reliability
-
-External websites are outside the system's control.
-
-Expected failure modes:
-
-- HTML changes,
-- anti-bot behavior,
-- rate limits,
-- slow pages,
-- JavaScript failures,
-- redirects,
-- login walls,
-- geo restrictions,
-- temporary outages.
-
-The scraper should treat parser failures as normal operational failures rather than application crashes.
-
-## 7.7 Hard Crash Recovery
-
-The PostgreSQL advisory lock is automatically released when its database connection disappears.
-
-However, a hard crash can leave a `ScrapeRun` row with:
+The required baseline is:
 
 ```text
-Status = Running
-```
-
-even though no process is still running.
-
-A future reliability improvement should mark stale running rows as `Abandoned` or `Failed` during startup or before the next run.
-
-This is a data-status recovery problem, not a lock problem.
-
-## 7.8 Review Concurrency
-
-Concurrent review actions can create a race if two requests attempt to review the same pending result.
-
-A future hardening step should use a conditional update such as:
-
-```text
-UPDATE ...
-WHERE review_status = Pending
-```
-
-and verify exactly one affected row.
-
-If no row is updated, return:
-
-```text
-409 Conflict
-```
-
-## 7.9 Database Availability
-
-PostgreSQL is a central dependency.
-
-If Neon PostgreSQL is unavailable:
-
-- public data operations fail,
-- scrape execution cannot coordinate,
-- the advisory lock cannot be acquired,
-- results cannot be persisted.
-
-The system currently prefers fail-closed behavior rather than operating with divergent local state.
-
-## 7.10 Scheduler Reliability
-
-Windows Task Scheduler provides simple local scheduling.
-
-Advantages:
-
-- no always-running background worker required,
-- easy local administration,
-- integrates with the run-once command.
-
-Limitations:
-
-- machine must be running,
-- task configuration is local machine state,
-- scheduling is not distributed,
-- missed jobs depend on Windows task configuration.
-
-If the system becomes multi-machine or cloud-native, scheduling should move to a centralized job runner.
-
-## 7.11 Private Frontend Polling
-
-The private dashboard periodically refreshes status.
-
-At current scale this is acceptable.
-
-Potential future optimization:
-
-- increase interval,
-- pause polling when the tab is hidden,
-- use server events or WebSocket only if real-time behavior becomes necessary.
-
-Do not introduce real-time infrastructure unless polling becomes an actual bottleneck.
-
----
-
-# 8. Reliability Principles
-
-The current system follows these reliability principles:
-
-```text
-Fail closed on unsafe network access.
-Fail closed when authentication is missing.
-Do not expose secrets in errors.
-Serialize scrape execution.
-Preserve historical observations.
-Do not treat stale data as fresh.
-Keep one database source of truth.
-Allow individual scrape failures without corrupting the whole run.
-```
-
----
-
-# 9. Current Known Limitations
-
-1. Review actions should gain optimistic concurrency protection.
-2. Stale `Running` scrape runs should be recovered after crashes.
-3. Database constraints can be strengthened for quantities, prices, and run/source uniqueness.
-4. Large history tables will eventually require query/index tuning.
-5. Python scraper concurrency is intentionally limited.
-6. SSRF DNS validation still has a theoretical DNS TOCTOU window.
-7. Windows Task Scheduler is local-machine infrastructure rather than distributed scheduling.
-8. Browser automation remains dependent on third-party site stability.
-
-These are acceptable limitations for the current project scale.
-
----
-
-# 10. Design Principles Summary
-
-The current architecture is intentionally based on:
-
-```text
-one source of truth
+one shared database source of truth
 one global scrape coordinator
 one shared best-offer rule
-one canonical review workflow
+concurrency-safe review transitions
+one canonical Reviews entry
 one local private execution boundary
 one server-side private API token
-one execution-time SSRF guard
+execution-time SSRF protection
+stale Running -> Abandoned recovery
+database-backed integrity constraints
 ```
 
-The system should continue to prefer:
-
-- derived state over duplicated persisted state,
-- shared business rules over duplicated logic,
-- simple local execution over premature distributed infrastructure,
-- explicit security boundaries,
-- and fewer moving parts wherever correctness is preserved.
+Changes to functionality, data/API contracts, architecture, security boundaries, concurrency, scheduling, or reliability require explicit approval before implementation.

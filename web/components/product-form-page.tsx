@@ -330,7 +330,7 @@ export function ItemFormPage({
                 />
               </div>
 
-              <Field label="Check interval (minutes)">
+              <Field label="Minimum scheduled interval (minutes)">
                 <Input
                   type="number"
                   min="1"
@@ -341,7 +341,7 @@ export function ItemFormPage({
                   onChange={(event) => updateForm("checkIntervalMinutes", event.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  At least one source with Scraping ON enables scheduled scraping. Leave empty to run on every scheduler invocation.
+                  Windows Task Scheduler decides when checks are evaluated. This value only prevents scheduled runs from checking the item again too soon; Run now ignores it. Leave empty to allow every scheduler invocation.
                 </p>
               </Field>
             </CardContent>

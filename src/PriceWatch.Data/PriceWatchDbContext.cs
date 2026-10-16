@@ -33,7 +33,30 @@ public class PriceWatchDbContext : DbContext
 
         modelBuilder.Entity<TrackedItem>(entity =>
         {
-            entity.ToTable("tracked_items");
+            entity.ToTable("tracked_items", table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_tracked_items_comparison_quantity_positive",
+                    "comparison_quantity > 0");
+                table.HasCheckConstraint(
+                    "ck_tracked_items_target_price_nonnegative",
+                    "target_price IS NULL OR target_price >= 0");
+                table.HasCheckConstraint(
+                    "ck_tracked_items_check_interval_positive",
+                    "check_interval_minutes IS NULL OR check_interval_minutes > 0");
+                table.HasCheckConstraint(
+                    "ck_tracked_items_current_price_nonnegative",
+                    "current_price IS NULL OR current_price >= 0");
+                table.HasCheckConstraint(
+                    "ck_tracked_items_current_quantity_positive",
+                    "current_quantity IS NULL OR current_quantity > 0");
+                table.HasCheckConstraint(
+                    "ck_tracked_items_previous_price_nonnegative",
+                    "previous_price IS NULL OR previous_price >= 0");
+                table.HasCheckConstraint(
+                    "ck_tracked_items_previous_quantity_positive",
+                    "previous_quantity IS NULL OR previous_quantity > 0");
+            });
 
             entity.HasKey(x => x.Id);
 
@@ -140,7 +163,15 @@ public class PriceWatchDbContext : DbContext
 
         modelBuilder.Entity<ItemSource>(entity =>
         {
-            entity.ToTable("item_sources");
+            entity.ToTable("item_sources", table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_item_sources_default_quantity_positive",
+                    "default_quantity > 0");
+                table.HasCheckConstraint(
+                    "ck_item_sources_manual_price_nonnegative",
+                    "manual_price IS NULL OR manual_price >= 0");
+            });
 
             entity.HasKey(x => x.Id);
 
@@ -160,7 +191,15 @@ public class PriceWatchDbContext : DbContext
 
         modelBuilder.Entity<PriceHistory>(entity =>
         {
-            entity.ToTable("price_history");
+            entity.ToTable("price_history", table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_price_history_price_nonnegative",
+                    "price >= 0");
+                table.HasCheckConstraint(
+                    "ck_price_history_quantity_positive",
+                    "quantity > 0");
+            });
 
             entity.HasKey(x => x.Id);
 
@@ -231,7 +270,21 @@ public class PriceWatchDbContext : DbContext
 
         modelBuilder.Entity<ScrapeResult>(entity =>
         {
-            entity.ToTable("scrape_results");
+            entity.ToTable("scrape_results", table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_scrape_results_scraped_price_nonnegative",
+                    "scraped_price IS NULL OR scraped_price >= 0");
+                table.HasCheckConstraint(
+                    "ck_scrape_results_scraped_quantity_positive",
+                    "scraped_quantity IS NULL OR scraped_quantity > 0");
+                table.HasCheckConstraint(
+                    "ck_scrape_results_manual_price_nonnegative",
+                    "manual_price IS NULL OR manual_price >= 0");
+                table.HasCheckConstraint(
+                    "ck_scrape_results_manual_quantity_positive",
+                    "manual_quantity IS NULL OR manual_quantity > 0");
+            });
 
             entity.HasKey(x => x.Id);
 
@@ -293,6 +346,10 @@ public class PriceWatchDbContext : DbContext
 
             entity.HasIndex(x => x.RunId);
 
+            entity.HasIndex(x => new { x.RunId, x.SourceId })
+                .IsUnique()
+                .HasFilter("source_id IS NOT NULL");
+
             entity.HasIndex(x => x.ItemId);
 
             entity.HasIndex(x => new
@@ -309,7 +366,15 @@ public class PriceWatchDbContext : DbContext
 
         modelBuilder.Entity<PriceAlertEvent>(entity =>
         {
-            entity.ToTable("price_alert_events");
+            entity.ToTable("price_alert_events", table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_price_alert_events_unit_price_nonnegative",
+                    "unit_price >= 0");
+                table.HasCheckConstraint(
+                    "ck_price_alert_events_target_unit_price_nonnegative",
+                    "target_unit_price >= 0");
+            });
 
             entity.HasKey(x => x.Id);
 

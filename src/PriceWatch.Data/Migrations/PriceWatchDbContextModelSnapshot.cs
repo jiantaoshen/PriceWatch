@@ -77,7 +77,12 @@ namespace PriceWatch.Data.Migrations
                     b.HasIndex("ItemId")
                         .HasDatabaseName("ix_item_sources_item_id");
 
-                    b.ToTable("item_sources", (string)null);
+                    b.ToTable("item_sources", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_item_sources_default_quantity_positive", "default_quantity > 0");
+
+                            t.HasCheckConstraint("ck_item_sources_manual_price_nonnegative", "manual_price IS NULL OR manual_price >= 0");
+                        });
                 });
 
             modelBuilder.Entity("PriceWatch.Data.Entities.PriceAlertEvent", b =>
@@ -135,7 +140,12 @@ namespace PriceWatch.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_price_alert_events_price_history_id");
 
-                    b.ToTable("price_alert_events", (string)null);
+                    b.ToTable("price_alert_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_price_alert_events_target_unit_price_nonnegative", "target_unit_price >= 0");
+
+                            t.HasCheckConstraint("ck_price_alert_events_unit_price_nonnegative", "unit_price >= 0");
+                        });
                 });
 
             modelBuilder.Entity("PriceWatch.Data.Entities.PriceHistory", b =>
@@ -200,7 +210,12 @@ namespace PriceWatch.Data.Migrations
                     b.HasIndex("ItemId", "RecordedAt")
                         .HasDatabaseName("ix_price_history_item_id_recorded_at");
 
-                    b.ToTable("price_history", (string)null);
+                    b.ToTable("price_history", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_price_history_price_nonnegative", "price >= 0");
+
+                            t.HasCheckConstraint("ck_price_history_quantity_positive", "quantity > 0");
+                        });
                 });
 
             modelBuilder.Entity("PriceWatch.Data.Entities.ScrapeResult", b =>
@@ -239,7 +254,7 @@ namespace PriceWatch.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("manual_unit_price")
-                        .HasComputedColumnSql("CASE\r\n    WHEN manual_price IS NULL\r\n      OR manual_quantity IS NULL\r\n    THEN NULL\r\n    ELSE manual_price / manual_quantity\r\nEND", true);
+                        .HasComputedColumnSql("CASE\n    WHEN manual_price IS NULL\n      OR manual_quantity IS NULL\n    THEN NULL\n    ELSE manual_price / manual_quantity\nEND", true);
 
                     b.Property<string>("ResultStatus")
                         .IsRequired()
@@ -280,7 +295,7 @@ namespace PriceWatch.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("scraped_unit_price")
-                        .HasComputedColumnSql("CASE\r\n    WHEN scraped_price IS NULL\r\n      OR scraped_quantity IS NULL\r\n    THEN NULL\r\n    ELSE scraped_price / scraped_quantity\r\nEND", true);
+                        .HasComputedColumnSql("CASE\n    WHEN scraped_price IS NULL\n      OR scraped_quantity IS NULL\n    THEN NULL\n    ELSE scraped_price / scraped_quantity\nEND", true);
 
                     b.Property<long?>("SourceId")
                         .HasColumnType("bigint")
@@ -305,7 +320,21 @@ namespace PriceWatch.Data.Migrations
                     b.HasIndex("ItemId", "ReviewStatus")
                         .HasDatabaseName("ix_scrape_results_item_id_review_status");
 
-                    b.ToTable("scrape_results", (string)null);
+                    b.HasIndex("RunId", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_scrape_results_run_id_source_id")
+                        .HasFilter("source_id IS NOT NULL");
+
+                    b.ToTable("scrape_results", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_scrape_results_manual_price_nonnegative", "manual_price IS NULL OR manual_price >= 0");
+
+                            t.HasCheckConstraint("ck_scrape_results_manual_quantity_positive", "manual_quantity IS NULL OR manual_quantity > 0");
+
+                            t.HasCheckConstraint("ck_scrape_results_scraped_price_nonnegative", "scraped_price IS NULL OR scraped_price >= 0");
+
+                            t.HasCheckConstraint("ck_scrape_results_scraped_quantity_positive", "scraped_quantity IS NULL OR scraped_quantity > 0");
+                        });
                 });
 
             modelBuilder.Entity("PriceWatch.Data.Entities.ScrapeRun", b =>
@@ -403,7 +432,7 @@ namespace PriceWatch.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("current_unit_price")
-                        .HasComputedColumnSql("CASE\r\n    WHEN current_price IS NULL\r\n      OR current_quantity IS NULL\r\n    THEN NULL\r\n    ELSE current_price / current_quantity\r\nEND", true);
+                        .HasComputedColumnSql("CASE\n    WHEN current_price IS NULL\n      OR current_quantity IS NULL\n    THEN NULL\n    ELSE current_price / current_quantity\nEND", true);
 
                     b.Property<string>("ItemType")
                         .IsRequired()
@@ -448,7 +477,7 @@ namespace PriceWatch.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("previous_unit_price")
-                        .HasComputedColumnSql("CASE\r\n    WHEN previous_price IS NULL\r\n      OR previous_quantity IS NULL\r\n    THEN NULL\r\n    ELSE previous_price / previous_quantity\r\nEND", true);
+                        .HasComputedColumnSql("CASE\n    WHEN previous_price IS NULL\n      OR previous_quantity IS NULL\n    THEN NULL\n    ELSE previous_price / previous_quantity\nEND", true);
 
                     b.Property<decimal?>("TargetPrice")
                         .HasPrecision(18, 4)
@@ -460,7 +489,7 @@ namespace PriceWatch.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("target_unit_price")
-                        .HasComputedColumnSql("CASE\r\n    WHEN target_price IS NULL\r\n    THEN NULL\r\n    ELSE target_price / comparison_quantity\r\nEND", true);
+                        .HasComputedColumnSql("CASE\n    WHEN target_price IS NULL\n    THEN NULL\n    ELSE target_price / comparison_quantity\nEND", true);
 
                     b.Property<bool>("TrackingEnabled")
                         .HasColumnType("boolean")
@@ -490,7 +519,22 @@ namespace PriceWatch.Data.Migrations
                     b.HasIndex("PreviousSourceId")
                         .HasDatabaseName("ix_tracked_items_previous_source_id");
 
-                    b.ToTable("tracked_items", (string)null);
+                    b.ToTable("tracked_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tracked_items_check_interval_positive", "check_interval_minutes IS NULL OR check_interval_minutes > 0");
+
+                            t.HasCheckConstraint("ck_tracked_items_comparison_quantity_positive", "comparison_quantity > 0");
+
+                            t.HasCheckConstraint("ck_tracked_items_current_price_nonnegative", "current_price IS NULL OR current_price >= 0");
+
+                            t.HasCheckConstraint("ck_tracked_items_current_quantity_positive", "current_quantity IS NULL OR current_quantity > 0");
+
+                            t.HasCheckConstraint("ck_tracked_items_previous_price_nonnegative", "previous_price IS NULL OR previous_price >= 0");
+
+                            t.HasCheckConstraint("ck_tracked_items_previous_quantity_positive", "previous_quantity IS NULL OR previous_quantity > 0");
+
+                            t.HasCheckConstraint("ck_tracked_items_target_price_nonnegative", "target_price IS NULL OR target_price >= 0");
+                        });
                 });
 
             modelBuilder.Entity("PriceWatch.Data.Entities.ItemSource", b =>
