@@ -16,14 +16,17 @@ public class ReviewsController : ControllerBase
 {
     private readonly PriceWatchDbContext _db;
     private readonly PriceUpdateService _priceUpdateService;
+    private readonly OfferSelectionService _offers;
 
 
     public ReviewsController(
         PriceWatchDbContext db,
-        PriceUpdateService priceUpdateService)
+        PriceUpdateService priceUpdateService,
+        OfferSelectionService offers)
     {
         _db = db;
         _priceUpdateService = priceUpdateService;
+        _offers = offers;
     }
 
 
@@ -90,7 +93,8 @@ public class ReviewsController : ControllerBase
     // ========================================================
     // POST /api/reviews/{id}/accept
     //
-    // Accept the scraped value exactly as returned.
+    // Accept the scraped value into this run's offer set.
+    // The current item price is then recalculated from all accepted offers.
     // ========================================================
 
     [HttpPost("{id:long}/accept")]
@@ -167,30 +171,13 @@ public class ReviewsController : ControllerBase
             now;
 
 
-        await _priceUpdateService.ApplyAcceptedPriceAsync(
-            itemId:
-                result.ItemId,
+        // Persist the review decision first so the shared offer selector
+        // sees this result as accepted inside the current transaction.
+        await _db.SaveChangesAsync(ct);
 
-            price:
-                result.ScrapedPrice.Value,
-
-            quantity:
-                result.ScrapedQuantity.Value,
-
-            origin:
-                PriceOrigin.Scrape,
-
-            sourceId:
-                result.SourceId,
-
-            scrapeResultId:
-                result.Id,
-
-            observedAt:
-                result.CreatedAt,
-
-            cancellationToken: ct);
-
+        await RefreshProjectedPriceAsync(
+            result,
+            ct);
 
         await _db.SaveChangesAsync(ct);
 
@@ -256,7 +243,8 @@ public class ReviewsController : ControllerBase
     // POST /api/reviews/{id}/manual
     //
     // Ignore the scraped value and accept a manually
-    // corrected package price / quantity instead.
+    // corrected package price / quantity for this source.
+    // The corrected offer still competes with the other accepted offers.
     // ========================================================
 
     [HttpPost("{id:long}/manual")]
@@ -331,31 +319,13 @@ public class ReviewsController : ControllerBase
             now;
 
 
-        await _priceUpdateService.ApplyAcceptedPriceAsync(
-            itemId:
-                result.ItemId,
+        // ManualOverride corrects this source observation; it does not
+        // force that source to become the item's current best offer.
+        await _db.SaveChangesAsync(ct);
 
-            price:
-                request.Price,
-
-            quantity:
-                request.Quantity,
-
-            origin:
-                PriceOrigin.ManualOverride,
-
-            sourceId:
-                result.SourceId,
-
-            scrapeResultId:
-                result.Id,
-
-            observedAt:
-                now,
-
-            cancellationToken:
-                ct);
-
+        await RefreshProjectedPriceAsync(
+            result,
+            ct);
 
         await _db.SaveChangesAsync(ct);
 
@@ -369,6 +339,56 @@ public class ReviewsController : ControllerBase
     // ========================================================
     // Helper
     // ========================================================
+
+    private async Task RefreshProjectedPriceAsync(
+        ScrapeResult reviewedResult,
+        CancellationToken ct)
+    {
+        // Historical review decisions remain part of the audit trail, but
+        // must not roll CurrentPrice back after a newer run has observed the item.
+        if (!await _offers.IsLatestRunForItemAsync(
+                reviewedResult.ItemId,
+                reviewedResult.RunId,
+                ct))
+        {
+            return;
+        }
+
+        var best = await _offers.GetBestAcceptedOfferAsync(
+            reviewedResult.ItemId,
+            reviewedResult.RunId,
+            ct);
+
+        if (best is null)
+        {
+            return;
+        }
+
+        await _priceUpdateService.ApplyAcceptedPriceAsync(
+            itemId:
+                reviewedResult.ItemId,
+
+            price:
+                best.Price,
+
+            quantity:
+                best.Quantity,
+
+            origin:
+                best.Origin,
+
+            sourceId:
+                best.SourceId,
+
+            scrapeResultId:
+                best.ScrapeResultId,
+
+            observedAt:
+                best.ObservedAt,
+
+            cancellationToken:
+                ct);
+    }
 
     private static string? Normalize(
         string? value)

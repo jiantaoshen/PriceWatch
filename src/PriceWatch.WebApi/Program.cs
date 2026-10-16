@@ -60,6 +60,7 @@ builder.Services.AddDbContextPool<PriceWatchDbContext>(options =>
 // ============================================================
 
 builder.Services.AddScoped<PriceUpdateService>();
+builder.Services.AddScoped<OfferSelectionService>();
 
 
 // ============================================================
