@@ -101,21 +101,12 @@ public static class PrivateApiEndpoints
                 x.TrackingEnabled,
                 ct);
 
-        var automaticSources = await db.ItemSources
+        var scrapingSources = await db.ItemSources
             .AsNoTracking()
             .CountAsync(x =>
                 x.Item.ArchivedAt == null &&
                 x.Item.TrackingEnabled &&
                 x.ScrapingEnabled,
-                ct);
-
-        var manualSources = await db.ItemSources
-            .AsNoTracking()
-            .CountAsync(x =>
-                x.Item.ArchivedAt == null &&
-                x.Item.TrackingEnabled &&
-                !x.ScrapingEnabled &&
-                x.ManualPrice != null,
                 ct);
 
         var pendingReviews = await db.ScrapeResults
@@ -144,8 +135,7 @@ public static class PrivateApiEndpoints
         {
             coordinator = coordinator.GetStatus(),
             activeItems,
-            automaticSources,
-            manualSources,
+            scrapingSources,
             pendingReviews,
             lastRun
         });
@@ -181,19 +171,12 @@ public static class PrivateApiEndpoints
                     ? x.CurrentSource.Store
                     : null,
                 SourceCount = x.Sources.Count,
-                AutomaticSourceCount = x.Sources.Count(s => s.ScrapingEnabled),
-                ManualSourceCount = x.Sources.Count(s =>
-                    !s.ScrapingEnabled &&
-                    s.ManualPrice != null),
-                x.UpdateMode,
+                HasScrapingSources = x.Sources.Any(s => s.ScrapingEnabled),
+                x.CheckIntervalMinutes,
                 x.TrackingEnabled,
                 x.LastCheckedAt,
                 x.LastPriceChangedAt,
-                x.ArchivedAt,
-                BelowTarget =
-                    x.TargetUnitPrice != null &&
-                    x.CurrentUnitPrice != null &&
-                    x.CurrentUnitPrice <= x.TargetUnitPrice
+                x.ArchivedAt
             })
             .ToListAsync(ct);
 

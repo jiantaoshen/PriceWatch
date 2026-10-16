@@ -32,7 +32,8 @@ public sealed class ScrapeOrchestrator
         _logger = logger;
     }
 
-    public async Task<Guid> RunOnceAsync(
+    public async Task<Guid?> RunOnceAsync(
+        ScrapeTrigger trigger,
         CancellationToken ct = default)
     {
         var startedAt = DateTimeOffset.UtcNow;
@@ -41,9 +42,32 @@ public sealed class ScrapeOrchestrator
             .Include(x => x.Sources)
             .Where(x =>
                 x.ArchivedAt == null &&
-                x.TrackingEnabled)
+                x.TrackingEnabled &&
+                x.Sources.Any(source => source.ScrapingEnabled))
             .OrderBy(x => x.Name)
             .ToListAsync(ct);
+
+        if (trigger == ScrapeTrigger.Scheduled)
+        {
+            items = items
+                .Where(item => IsDueForScheduledRun(item, startedAt))
+                .ToList();
+
+            if (items.Count == 0)
+            {
+                _logger.LogInformation(
+                    "Scheduled scrape skipped because no scraping-enabled items are due.");
+
+                return null;
+            }
+        }
+        else if (items.Count == 0)
+        {
+            _logger.LogInformation(
+                "On-demand scrape skipped because no tracked items have scraping-enabled sources.");
+
+            return null;
+        }
 
         var run = new ScrapeRun
         {
@@ -60,7 +84,8 @@ public sealed class ScrapeOrchestrator
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "Starting scrape run {RunId} for {ItemCount} active items.",
+            "Starting {Trigger} scrape run {RunId} for {ItemCount} items.",
+            trigger,
             run.Id,
             items.Count);
 
@@ -122,14 +147,14 @@ public sealed class ScrapeOrchestrator
                 var itemHadSuccess = false;
                 var itemHadSuspicious = false;
                 var itemHadFailed = false;
-                var automaticSources = item.Sources
+                var scrapingSources = item.Sources
                     .Where(x => x.ScrapingEnabled)
                     .ToList();
 
                 item.LastCheckedAt = DateTimeOffset.UtcNow;
                 item.UpdatedAt = DateTimeOffset.UtcNow;
 
-                foreach (var source in automaticSources)
+                foreach (var source in scrapingSources)
                 {
                     var createdAt = DateTimeOffset.UtcNow;
 
@@ -241,18 +266,7 @@ public sealed class ScrapeOrchestrator
                     await _db.SaveChangesAsync(ct);
                 }
 
-                if (automaticSources.Count == 0)
-                {
-                    if (best is not null)
-                    {
-                        run.Successful++;
-                    }
-                    else
-                    {
-                        run.Failed++;
-                    }
-                }
-                else if (itemHadSuspicious)
+                if (itemHadSuspicious)
                 {
                     run.Suspicious++;
                 }
@@ -294,6 +308,37 @@ public sealed class ScrapeOrchestrator
             await _db.SaveChangesAsync(CancellationToken.None);
             throw;
         }
+    }
+
+
+    private static bool IsDueForScheduledRun(
+        TrackedItem item,
+        DateTimeOffset now)
+    {
+        if (!item.Sources.Any(source => source.ScrapingEnabled))
+        {
+            return false;
+        }
+
+        if (!item.CheckIntervalMinutes.HasValue ||
+            !item.LastCheckedAt.HasValue)
+        {
+            // A null interval means "every scheduled invocation". A never-
+            // checked item is also immediately due.
+            return true;
+        }
+
+        var intervalMinutes = item.CheckIntervalMinutes.Value;
+
+        if (intervalMinutes <= 0)
+        {
+            // The Web API rejects non-positive values. Treat legacy/corrupt
+            // values as due rather than silently disabling tracking.
+            return true;
+        }
+
+        return now - item.LastCheckedAt.Value >=
+            TimeSpan.FromMinutes(intervalMinutes);
     }
 
     private static ScrapeRunStatus DetermineRunStatus(

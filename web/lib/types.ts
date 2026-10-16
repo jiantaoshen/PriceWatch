@@ -2,11 +2,6 @@ export type ItemType =
   | "Product"
   | "Subscription";
 
-export type UpdateMode =
-  | "Manual"
-  | "Automatic"
-  | "Hybrid";
-
 export type ItemListItem = {
   id: string;
   itemType: ItemType;
@@ -22,8 +17,8 @@ export type ItemListItem = {
 
   currentStore: string | null;
   sourceCount: number;
+  hasScrapingSources: boolean;
 
-  updateMode: UpdateMode;
   checkIntervalMinutes: number | null;
   trackingEnabled: boolean;
 
@@ -32,7 +27,6 @@ export type ItemListItem = {
   lastPriceChangedAt: string | null;
 
   archivedAt: string | null;
-  belowTarget: boolean;
 };
 
 export type ItemSourceDetail = {
@@ -70,7 +64,6 @@ export type ItemDetail = {
   previousSourceId: number | null;
   previousStore: string | null;
 
-  updateMode: UpdateMode;
   checkIntervalMinutes: number | null;
   trackingEnabled: boolean;
 
@@ -96,7 +89,6 @@ export type SourceOffer = {
   url: string | null;
   note: string | null;
   scrapingEnabled: boolean;
-  origin: string | null;
   price: number | null;
   quantity: number | null;
   unitPrice: number | null;
@@ -131,6 +123,5 @@ export type ProductFilter =
   | "active"
   | "archived"
   | "below-target"
-  | "needs-review"
   | "drops"
   | "increases";

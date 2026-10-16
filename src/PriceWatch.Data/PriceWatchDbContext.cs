@@ -52,10 +52,6 @@ public class PriceWatchDbContext : DbContext
                 .HasConversion<string>()
                 .HasMaxLength(20);
 
-            entity.Property(x => x.UpdateMode)
-                .HasConversion<string>()
-                .HasMaxLength(20);
-
             entity.Property(x => x.TargetPrice)
                 .HasPrecision(18, 4);
 

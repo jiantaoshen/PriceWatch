@@ -1,6 +1,5 @@
 "use client";
 
-import { Archive, ArrowLeft, ExternalLink, Pencil, RotateCcw, Store, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -8,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { PriceHistoryChart } from "@/components/price-history-chart";
 import { SiteHeader } from "@/components/site-header";
-import { Alert, AlertDescription, AlertTitle } from "@pricewatch/ui/alert";
+import { Alert, AlertDescription } from "@pricewatch/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -112,6 +111,8 @@ export default function ProductDetailPage() {
     ? formatRelativeDifference(item.currentUnitPrice, item.targetUnitPrice, item.currency)
     : null;
 
+  const hasScrapingSources = item?.sources.some((source) => source.scrapingEnabled) ?? false;
+
   async function runItemAction(path: string, method: "POST" | "DELETE") {
     setActionBusy(true);
 
@@ -152,7 +153,6 @@ export default function ProductDetailPage() {
         ) : item ? (
           <div className="space-y-6">
             <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm", className: "-ml-2" })}>
-              <ArrowLeft className="size-4" />
               Products
             </Link>
 
@@ -160,7 +160,6 @@ export default function ProductDetailPage() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">{item.itemType}</Badge>
-                  <Badge variant="outline">{item.updateMode}</Badge>
                   {item.archivedAt && <Badge>Archived</Badge>}
                 </div>
 
@@ -185,7 +184,6 @@ export default function ProductDetailPage() {
 
               <div className="flex flex-wrap gap-2">
                 <Link href={`/items/${item.id}/edit`} className={buttonVariants({ variant: "outline" })}>
-                  <Pencil className="size-4" />
                   Edit
                 </Link>
 
@@ -195,7 +193,6 @@ export default function ProductDetailPage() {
                     disabled={actionBusy}
                     onClick={() => void runItemAction(`/api/items/${item.id}/restore`, "POST")}
                   >
-                    <RotateCcw className="size-4" />
                     Restore
                   </Button>
                 ) : (
@@ -204,14 +201,12 @@ export default function ProductDetailPage() {
                     disabled={actionBusy}
                     onClick={() => void runItemAction(`/api/items/${item.id}/archive`, "POST")}
                   >
-                    <Archive className="size-4" />
                     Archive
                   </Button>
                 )}
 
                 <AlertDialog>
                   <AlertDialogTrigger render={<Button variant="destructive" disabled={actionBusy} />}>
-                    <Trash2 className="size-4" />
                     Delete
                   </AlertDialogTrigger>
 
@@ -279,15 +274,11 @@ export default function ProductDetailPage() {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="font-medium">{offer.store}</h3>
-                              <Badge variant={offer.isCurrent ? "default" : "secondary"}>
-                                {offer.isCurrent
-                                  ? "Current best"
-                                  : offer.origin ?? (offer.scrapingEnabled ? "Automatic" : "Manual")}
-                              </Badge>
+                              {offer.isCurrent && <Badge>Current best</Badge>}
                             </div>
 
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {offer.scrapingEnabled ? "Automatic source" : "Manual source"}
+                              Scraping {offer.scrapingEnabled ? "ON" : "OFF"}
                               {offer.observedAt ? ` · ${formatDateTime(offer.observedAt)}` : ""}
                             </p>
                           </div>
@@ -320,7 +311,6 @@ export default function ProductDetailPage() {
                                   className={buttonVariants({ variant: "ghost", size: "sm" })}
                                 >
                                   Open offer
-                                  <ExternalLink className="size-4" />
                                 </a>
                               )}
                             </div>
@@ -338,7 +328,7 @@ export default function ProductDetailPage() {
                 </CardHeader>
 
                 <CardContent className="space-y-3 text-sm">
-                  <InfoRow label="Mode" value={item.updateMode} />
+                  <InfoRow label="Scraping" value={hasScrapingSources ? "ON" : "OFF"} />
                   <InfoRow label="Tracking" value={item.trackingEnabled ? "Enabled" : "Disabled"} />
                   <InfoRow label="Last checked" value={formatDateTime(item.lastCheckedAt)} />
                   <InfoRow label="Last price change" value={formatDateTime(item.lastPriceChangedAt)} />
@@ -377,8 +367,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function EmptyMessage({ message }: { message: string }) {
   return (
     <Alert>
-      <Store className="size-4" />
-      <AlertTitle>PriceWatch</AlertTitle>
       <AlertDescription>{message}</AlertDescription>
     </Alert>
   );

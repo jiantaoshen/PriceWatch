@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -96,7 +95,6 @@ export function SubscriptionFormPage({
         unit: "month",
         targetPrice: null,
         comparisonQuantity: 1,
-        updateMode: "Manual",
         checkIntervalMinutes: null,
         trackingEnabled: false,
       };
@@ -119,7 +117,7 @@ export function SubscriptionFormPage({
 
       if (!itemId) throw new Error("Item ID is missing.");
 
-      // Current data model stores the subscription price in one hidden manual source.
+      // Current data model stores the subscription price in one hidden non-scraping source.
       const sourcePayload = {
         store: form.name.trim(),
         url: null,
@@ -184,7 +182,6 @@ export function SubscriptionFormPage({
           href="/subscriptions"
           className={buttonVariants({ variant: "ghost", size: "sm", className: "-ml-2" })}
         >
-          <ArrowLeft className="size-4" />
           Subscriptions
         </Link>
 
@@ -264,7 +261,6 @@ export function SubscriptionFormPage({
                   disabled={saving || deleting}
                   onClick={() => setDeleteOpen(true)}
                 >
-                  <Trash2 className="size-4" />
                   Delete
                 </Button>
               </div>

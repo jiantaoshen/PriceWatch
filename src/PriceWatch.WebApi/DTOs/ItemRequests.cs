@@ -16,8 +16,6 @@ public sealed class CreateItemRequest
 
     public decimal ComparisonQuantity { get; init; } = 1m;
 
-    public UpdateMode UpdateMode { get; init; } = UpdateMode.Manual;
-
     public int? CheckIntervalMinutes { get; init; }
 
     public bool TrackingEnabled { get; init; } = true;
@@ -36,8 +34,6 @@ public sealed class UpdateItemRequest
     public decimal? TargetPrice { get; init; }
 
     public decimal ComparisonQuantity { get; init; } = 1m;
-
-    public UpdateMode UpdateMode { get; init; }
 
     public int? CheckIntervalMinutes { get; init; }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { Pencil, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -80,7 +79,6 @@ export function SubscriptionCard({item, onRestored}: {
             disabled={busy}
             onClick={() => void restore()}
           >
-            <RotateCcw className="size-4" />
             {busy ? "Restoring…" : "Restore"}
           </Button>
         ) : (
@@ -94,7 +92,6 @@ export function SubscriptionCard({item, onRestored}: {
             size: "sm",
           })}
         >
-          <Pencil className="size-4" />
           Edit
         </Link>
       </CardFooter>

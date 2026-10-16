@@ -2,62 +2,81 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { AuthButton } from "@/components/auth-button";
+import { useAuth } from "@/components/auth-provider";
+import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   {
     label: "Products",
     href: "/",
-    isActive: (pathname: string) =>
-      pathname === "/" ||
-      pathname.startsWith("/items"),
+    isActive: (pathname: string) => pathname === "/" || pathname.startsWith("/items"),
   },
   {
     label: "Subscriptions",
     href: "/subscriptions",
-    isActive: (pathname: string) =>
-      pathname.startsWith("/subscriptions"),
+    isActive: (pathname: string) => pathname.startsWith("/subscriptions"),
   },
   {
     label: "Reviews",
     href: "/reviews",
-    isActive: (pathname: string) =>
-      pathname.startsWith("/reviews"),
+    isActive: (pathname: string) => pathname.startsWith("/reviews"),
   },
 ];
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const { ready, account, getAccessToken } = useAuth();
+  const [pendingReviews, setPendingReviews] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!ready || !account) {
+      setPendingReviews(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadReviewCount() {
+      try {
+        const token = await getAccessToken();
+        const result = await apiFetch<{ count: number }>("/api/reviews/pending/count", token.accessToken);
+        if (!cancelled) setPendingReviews(result.count);
+      } catch {
+        if (!cancelled) setPendingReviews(null);
+      }
+    }
+
+    void loadReviewCount();
+
+    const onReviewsChanged = () => void loadReviewCount();
+    window.addEventListener("pricewatch:reviews-changed", onReviewsChanged);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pricewatch:reviews-changed", onReviewsChanged);
+    };
+  }, [ready, account, getAccessToken, pathname]);
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-5 lg:gap-8">
-          <Link
-            href="/"
-            className="flex shrink-0 items-center font-semibold tracking-tight"
-          >
+          <Link href="/" className="shrink-0 text-base font-semibold tracking-tight">
             PriceWatch
           </Link>
 
-          <nav
-            aria-label="Main navigation"
-            className="flex min-w-0 items-center gap-1 overflow-x-auto"
-          >
+          <nav aria-label="Main navigation" className="flex min-w-0 items-center gap-1 overflow-x-auto">
             {navigation.map((item) => {
-              const active =
-                item.isActive(pathname);
+              const active = item.isActive(pathname);
 
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  aria-current={
-                    active
-                      ? "page"
-                      : undefined
-                  }
+                  aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
                     active
@@ -65,9 +84,12 @@ export function SiteHeader() {
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                   )}
                 >
-                  <span>
-                    {item.label}
-                  </span>
+                  <span>{item.label}</span>
+                  {item.href === "/reviews" && pendingReviews !== null && (
+                    <span className="rounded-md bg-muted-foreground/10 px-1.5 py-0.5 text-xs tabular-nums">
+                      {pendingReviews}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -81,3 +103,4 @@ export function SiteHeader() {
     </header>
   );
 }
+

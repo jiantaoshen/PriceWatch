@@ -1,26 +1,9 @@
 "use client";
 
-import {
-  Archive,
-  CircleDollarSign,
-  Radar,
-} from "lucide-react";
-
 import { formatMoney } from "@pricewatch/shared/format";
 import { cn } from "@/lib/utils";
 
-export type SubscriptionFilter =
-  | "active"
-  | "archived";
-
-type Metric = {
-  key: SubscriptionFilter;
-  label: string;
-  value: number;
-  icon: React.ComponentType<{
-    className?: string;
-  }>;
-};
+export type SubscriptionFilter = "active" | "archived";
 
 export function SubscriptionStatusNav({
   activeFilter,
@@ -37,19 +20,9 @@ export function SubscriptionStatusNav({
   monthlyTotal: number;
   currency: string;
 }) {
-  const metrics: Metric[] = [
-    {
-      key: "active",
-      label: "Active",
-      value: active,
-      icon: Radar,
-    },
-    {
-      key: "archived",
-      label: "Archived",
-      value: archived,
-      icon: Archive,
-    },
+  const metrics: Array<{ key: SubscriptionFilter; label: string; value: number }> = [
+    { key: "active", label: "Active", value: active },
+    { key: "archived", label: "Archived", value: archived },
   ];
 
   return (
@@ -57,7 +30,6 @@ export function SubscriptionStatusNav({
       <div className="flex min-w-max items-stretch justify-between">
         <nav className="flex items-stretch">
           {metrics.map((metric) => {
-            const Icon = metric.icon;
             const selected = metric.key === activeFilter;
 
             return (
@@ -66,54 +38,22 @@ export function SubscriptionStatusNav({
                 type="button"
                 onClick={() => onChange(metric.key)}
                 className={cn(
-                  "group flex min-w-[150px] items-center gap-3 border-r px-4 py-3 text-left transition-colors",
-                  selected
-                    ? "bg-foreground text-background"
-                    : "hover:bg-muted/60"
+                  "flex min-w-[150px] items-baseline gap-2 border-r px-4 py-3 text-left transition-colors",
+                  selected ? "bg-foreground text-background" : "hover:bg-muted/60"
                 )}
               >
-                <Icon
-                  className={cn(
-                    "size-4 shrink-0",
-                    selected
-                      ? "text-background"
-                      : "text-muted-foreground"
-                  )}
-                />
-
-                <div className="flex min-w-0 items-baseline gap-2">
-                  <span className="truncate text-sm font-medium">
-                    {metric.label}
-                  </span>
-
-                  <span
-                    className={cn(
-                      "text-xs tabular-nums",
-                      selected
-                        ? "text-background/70"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {metric.value}
-                  </span>
-                </div>
+                <span className="text-sm font-medium">{metric.label}</span>
+                <span className={cn("text-xs tabular-nums", selected ? "text-background/70" : "text-muted-foreground")}>
+                  {metric.value}
+                </span>
               </button>
             );
           })}
         </nav>
 
-        <div className="flex min-w-[220px] items-center justify-end gap-3 px-5 py-3">
-          <CircleDollarSign className="size-4 text-muted-foreground" />
-
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground">
-              Monthly total
-            </div>
-
-            <div className="font-semibold tabular-nums">
-              {formatMoney(monthlyTotal, currency)}
-            </div>
-          </div>
+        <div className="min-w-[220px] px-5 py-3 text-right">
+          <div className="text-xs text-muted-foreground">Monthly total</div>
+          <div className="font-semibold tabular-nums">{formatMoney(monthlyTotal, currency)}</div>
         </div>
       </div>
     </div>

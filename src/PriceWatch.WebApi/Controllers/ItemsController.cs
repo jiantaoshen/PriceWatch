@@ -54,8 +54,8 @@ public class ItemsController : ControllerBase
                     : null,
 
                 SourceCount = x.Sources.Count,
+                HasScrapingSources = x.Sources.Any(s => s.ScrapingEnabled),
 
-                x.UpdateMode,
                 x.CheckIntervalMinutes,
                 x.TrackingEnabled,
 
@@ -64,11 +64,6 @@ public class ItemsController : ControllerBase
                 x.LastPriceChangedAt,
 
                 x.ArchivedAt,
-
-                BelowTarget =
-                    x.TargetUnitPrice != null &&
-                    x.CurrentUnitPrice != null &&
-                    x.CurrentUnitPrice <= x.TargetUnitPrice,
 
                 MonthlyPrice = x.ItemType == ItemType.Subscription
                 ? x.Sources
@@ -123,7 +118,6 @@ public class ItemsController : ControllerBase
                     ? x.PreviousSource.Store
                     : null,
 
-                x.UpdateMode,
                 x.CheckIntervalMinutes,
                 x.TrackingEnabled,
 
@@ -225,7 +219,6 @@ public class ItemsController : ControllerBase
             TargetPrice = request.TargetPrice,
             ComparisonQuantity = request.ComparisonQuantity,
 
-            UpdateMode = request.UpdateMode,
             CheckIntervalMinutes = request.CheckIntervalMinutes,
             TrackingEnabled = request.TrackingEnabled,
 
@@ -277,7 +270,6 @@ public class ItemsController : ControllerBase
         item.TargetPrice = request.TargetPrice;
         item.ComparisonQuantity = request.ComparisonQuantity;
 
-        item.UpdateMode = request.UpdateMode;
         item.CheckIntervalMinutes = request.CheckIntervalMinutes;
         item.TrackingEnabled = request.TrackingEnabled;
 
@@ -416,6 +408,7 @@ public class ItemsController : ControllerBase
         var validationError = ValidateSource(
             request.Store,
             request.Url,
+            request.ScrapingEnabled,
             request.DefaultQuantity,
             request.ManualPrice);
 
@@ -477,6 +470,7 @@ public class ItemsController : ControllerBase
         var validationError = ValidateSource(
             request.Store,
             request.Url,
+            request.ScrapingEnabled,
             request.DefaultQuantity,
             request.ManualPrice);
 
@@ -590,10 +584,9 @@ public async Task<IActionResult> GetOffers(
         decimal? price = null;
         decimal? quantity = null;
         decimal? unitPrice = null;
-        string? origin = null;
         DateTimeOffset? observedAt = null;
 
-        // Long-lived manual source
+        // Scraping disabled: use the stored price
         if (
             !source.ScrapingEnabled &&
             source.ManualPrice.HasValue)
@@ -610,12 +603,10 @@ public async Task<IActionResult> GetOffers(
                     price / quantity;
             }
 
-            origin = "Manual";
-
             observedAt =
                 source.UpdatedAt;
         }
-        // Automatic source
+        // Scraped source
         else if (
             latestBySource.TryGetValue(
                 source.Id,
@@ -637,9 +628,6 @@ public async Task<IActionResult> GetOffers(
                 unitPrice =
                     price / quantity;
 
-                origin =
-                    "Manual override";
-
                 observedAt =
                     result.ReviewedAt ??
                     result.CreatedAt;
@@ -658,12 +646,6 @@ public async Task<IActionResult> GetOffers(
                 unitPrice =
                     price / quantity;
 
-                origin =
-                    result.ReviewStatus ==
-                    ReviewStatus.Accepted
-                        ? "Accepted scrape"
-                        : "Automatic";
-
                 observedAt =
                     result.ReviewedAt ??
                     result.CreatedAt;
@@ -677,7 +659,6 @@ public async Task<IActionResult> GetOffers(
             source.Url,
             source.Note,
             source.ScrapingEnabled,
-            Origin = origin,
             Price = price,
             Quantity = quantity,
             UnitPrice = unitPrice,
@@ -739,6 +720,7 @@ public async Task<IActionResult> GetOffers(
     private static string? ValidateSource(
         string store,
         string? url,
+        bool scrapingEnabled,
         decimal defaultQuantity,
         decimal? manualPrice)
     {
@@ -754,7 +736,22 @@ public async Task<IActionResult> GetOffers(
 
         if (manualPrice is < 0)
         {
-            return "ManualPrice cannot be negative.";
+            return "Price cannot be negative.";
+        }
+
+        if (scrapingEnabled && string.IsNullOrWhiteSpace(url))
+        {
+            return "Url is required when scraping is enabled.";
+        }
+
+        if (scrapingEnabled && manualPrice.HasValue)
+        {
+            return "Price must be empty when scraping is enabled.";
+        }
+
+        if (!scrapingEnabled && !manualPrice.HasValue)
+        {
+            return "Price is required when scraping is disabled.";
         }
 
         if (!string.IsNullOrWhiteSpace(url))

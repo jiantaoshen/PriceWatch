@@ -1,13 +1,12 @@
 "use client";
 
-import { ArchiveRestore, PackageOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState } from "@/components/empty-state";
 import { ProductCard } from "@/components/product-card";
 import { ProductStatusNav } from "@/components/product-status-nav";
-import { ProductToolbar, type ProductSort } from "@/components/product-toolbar";
+import { ItemListToolbar } from "@/components/product-list-toolbar";
 import { ProductsSkeleton } from "@/components/products-skeleton";
 import { WorkspacePage } from "@/components/workspace-page";
 import { ApiError, apiFetch } from "@/lib/api";
@@ -19,29 +18,24 @@ import {
   isBelowTarget,
   matchesItemSearch,
   sortItems,
+  type ItemSort,
 } from "@/lib/item-list";
-import type { ItemListItem, PendingReview, ProductFilter } from "@/lib/types";
+import type { ItemListItem, ProductFilter } from "@/lib/types";
 
 async function fetchProductsData(accessToken: string) {
-  const [items, reviews] = await Promise.all([
-    apiFetch<ItemListItem[]>("/api/items?includeArchived=true", accessToken),
-    apiFetch<PendingReview[]>("/api/reviews/pending", accessToken),
-  ]);
-
-  return { items, reviews };
+  return apiFetch<ItemListItem[]>("/api/items?includeArchived=true", accessToken);
 }
 
 export default function HomePage() {
   const { ready, account, getAccessToken } = useAuth();
 
   const [items, setItems] = useState<ItemListItem[]>([]);
-  const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ProductFilter>("active");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<ProductSort>("name");
+  const [sort, setSort] = useState<ItemSort>("name");
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,10 +53,8 @@ export default function HomePage() {
 
         return fetchProductsData(token.accessToken);
       })
-      .then(({ items, reviews }) => {
-        if (cancelled) return;
-        setItems(items);
-        setPendingReviews(reviews);
+      .then((items) => {
+        if (!cancelled) setItems(items);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -70,7 +62,6 @@ export default function HomePage() {
         if (err instanceof ApiError && err.status === 403) {
           setForbidden(true);
           setItems([]);
-          setPendingReviews([]);
         } else {
           setError(err instanceof Error ? err.message : String(err));
         }
@@ -93,9 +84,7 @@ export default function HomePage() {
 
       await apiFetch<void>(`/api/items/${id}/restore`, token.accessToken, { method: "POST" });
 
-      const { items, reviews } = await fetchProductsData(token.accessToken);
-      setItems(items);
-      setPendingReviews(reviews);
+      setItems(await fetchProductsData(token.accessToken));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -110,14 +99,10 @@ export default function HomePage() {
   const droppedProducts = activeProducts.filter(hasPriceDrop);
   const increasedProducts = activeProducts.filter(hasPriceIncrease);
 
-  const pendingProductIds = new Set(pendingReviews.map((review) => review.itemId));
-  const reviewProducts = activeProducts.filter((item) => pendingProductIds.has(item.id));
-
   let visibleProducts = activeProducts;
 
   if (filter === "archived") visibleProducts = archivedProducts;
   if (filter === "below-target") visibleProducts = belowTargetProducts;
-  if (filter === "needs-review") visibleProducts = reviewProducts;
   if (filter === "drops") visibleProducts = droppedProducts;
   if (filter === "increases") visibleProducts = increasedProducts;
 
@@ -137,14 +122,12 @@ export default function HomePage() {
         active={activeProducts.length}
         archived={archivedProducts.length}
         belowTarget={belowTargetProducts.length}
-        needsReview={reviewProducts.length}
         drops={droppedProducts.length}
         increases={increasedProducts.length}
       />
 
       {filter === "archived" && (
-        <div className="flex items-start gap-3 rounded-xl border border-dashed bg-muted/25 px-4 py-3 text-sm">
-          <ArchiveRestore className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <div className="rounded-xl border border-dashed bg-muted/25 px-4 py-3 text-sm">
           <div>
             <div className="font-medium">Archived products keep their data.</div>
             <div className="mt-0.5 text-muted-foreground">
@@ -155,7 +138,21 @@ export default function HomePage() {
         </div>
       )}
 
-      <ProductToolbar search={search} onSearchChange={setSearch} sort={sort} onSortChange={setSort} />
+      <ItemListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        sort={sort}
+        onSortChange={setSort}
+        sortOptions={[
+          { value: "name", label: "Name" },
+          { value: "current-price", label: "Current price" },
+          { value: "target-gap", label: "Target gap" },
+          { value: "last-checked", label: "Last checked" },
+        ]}
+        searchPlaceholder="Search products or stores…"
+        actionLabel="Add product"
+        actionHref="/items/new"
+      />
 
       <p className="text-sm text-muted-foreground">
         Showing <span className="font-medium text-foreground">{filteredProducts.length}</span>{" "}
@@ -166,7 +163,6 @@ export default function HomePage() {
         <ProductsSkeleton />
       ) : !account ? (
         <EmptyState
-          icon={PackageOpen}
           title="Sign in to view PriceWatch"
           description="Use the Login button in the top-right corner."
         />
@@ -174,15 +170,13 @@ export default function HomePage() {
         <ProductsSkeleton />
       ) : forbidden ? (
         <EmptyState
-          icon={PackageOpen}
           title="No data available"
           description="This Microsoft account does not have access to the PriceWatch data."
         />
       ) : error ? (
-        <EmptyState icon={PackageOpen} title="Could not load products" description={error} />
+        <EmptyState title="Could not load products" description={error} />
       ) : filteredProducts.length === 0 ? (
         <EmptyState
-          icon={PackageOpen}
           title={filter === "archived" ? "No archived products" : "No products here"}
           description={
             filter === "archived"

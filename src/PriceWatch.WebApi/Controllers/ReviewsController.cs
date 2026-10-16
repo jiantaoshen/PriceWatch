@@ -34,6 +34,18 @@ public class ReviewsController : ControllerBase
     // GET /api/reviews/pending
     // ========================================================
 
+    [HttpGet("pending/count")]
+    public async Task<IActionResult> GetPendingCount(
+        CancellationToken ct)
+    {
+        var count = await _db.ScrapeResults
+            .AsNoTracking()
+            .CountAsync(x => x.ReviewStatus == ReviewStatus.Pending, ct);
+
+        return Ok(new { count });
+    }
+
+
     [HttpGet("pending")]
     public async Task<IActionResult> GetPending(
         CancellationToken ct)

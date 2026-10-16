@@ -1,6 +1,5 @@
 "use client";
 
-import { Check, CircleAlert, ExternalLink, PencilLine, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -79,6 +78,7 @@ export default function ReviewsPage() {
       });
 
       setReviews(await fetchReviewsData(token.accessToken));
+      window.dispatchEvent(new Event("pricewatch:reviews-changed"));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -90,16 +90,10 @@ export default function ReviewsPage() {
     <WorkspacePage
       title="Reviews"
       description="Review suspicious scrape results before they change an accepted item price."
-      headerAction={
-        <Badge variant={reviews.length > 0 ? "default" : "secondary"} className="w-fit">
-          {reviews.length} {reviews.length === 1 ? "pending review" : "pending reviews"}
-        </Badge>
-      }
     >
       <div className="max-w-5xl">
         {error && (
           <Alert variant="destructive" className="mt-6">
-            <CircleAlert className="size-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -109,14 +103,13 @@ export default function ReviewsPage() {
             <LoadingReviews />
           ) : !account ? (
             <EmptyState
-              icon={Check}
               title="Sign in to view reviews"
               description="Use the Login button in the top-right corner."
             />
           ) : loading ? (
             <LoadingReviews />
           ) : reviews.length === 0 ? (
-            <EmptyState icon={Check} title="Nothing needs review" description="Suspicious scrape results will appear here." />
+            <EmptyState title="Nothing needs review" description="Suspicious scrape results will appear here." />
           ) : (
             reviews.map((review) => (
               <ReviewCard
@@ -201,7 +194,6 @@ function ReviewCard({
 
           <Link href={`/items/${review.itemId}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
             Product
-            <ExternalLink className="size-4" />
           </Link>
         </div>
       </CardHeader>
@@ -240,17 +232,14 @@ function ReviewCard({
 
         <div className="flex flex-wrap gap-2">
           <Button type="button" disabled={busy} onClick={() => void onAccept()}>
-            <Check className="size-4" />
             Accept scraped price
           </Button>
 
           <Button type="button" variant="outline" disabled={busy} onClick={() => togglePanel("manual")}>
-            <PencilLine className="size-4" />
             Manual override
           </Button>
 
           <Button type="button" variant="ghost" disabled={busy} onClick={() => togglePanel("reject")}>
-            <X className="size-4" />
             Reject
           </Button>
         </div>

@@ -6,13 +6,6 @@ public enum ItemType
     Subscription
 }
 
-public enum UpdateMode
-{
-    Manual,
-    Automatic,
-    Hybrid
-}
-
 public enum PriceOrigin
 {
     Scrape,

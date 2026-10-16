@@ -7,6 +7,7 @@ using PriceWatch.Core.Services;
 using PriceWatch.Data;
 using PriceWatch.Private;
 using PriceWatch.Private.Infrastructure;
+using PriceWatch.Private.Models;
 using PriceWatch.Private.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -117,8 +118,19 @@ if (runOnce)
         var orchestrator = scope.ServiceProvider
             .GetRequiredService<ScrapeOrchestrator>();
 
-        var runId = await orchestrator.RunOnceAsync();
-        Console.WriteLine($"PriceWatch run completed: {runId}");
+        var runId = await orchestrator.RunOnceAsync(
+            ScrapeTrigger.Scheduled);
+
+        if (runId.HasValue)
+        {
+            Console.WriteLine(
+                $"PriceWatch scheduled run completed: {runId.Value}");
+        }
+        else
+        {
+            Console.WriteLine(
+                "PriceWatch scheduled run skipped: no scraping-enabled items are due.");
+        }
     }
     catch (Exception exception)
     {

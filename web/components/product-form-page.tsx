@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
@@ -12,19 +12,18 @@ import { Button, buttonVariants } from "@pricewatch/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pricewatch/ui/card";
 import { Input } from "@pricewatch/ui/input";
 import { Label } from "@pricewatch/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
-import type { ItemDetail, UpdateMode } from "@/lib/types";
+import type { ItemDetail } from "@/lib/types";
 
 type SourceDraft = {
   id?: number;
   key: string;
   store: string;
   url: string;
-  kind: "automatic" | "manual";
+  scrapingEnabled: boolean;
   defaultQuantity: string;
   manualPrice: string;
   note: string;
@@ -36,7 +35,6 @@ type FormState = {
   unit: string;
   targetPrice: string;
   comparisonQuantity: string;
-  updateMode: UpdateMode;
   checkIntervalMinutes: string;
   trackingEnabled: boolean;
 };
@@ -46,7 +44,7 @@ function createEmptySource(): SourceDraft {
     key: crypto.randomUUID(),
     store: "",
     url: "",
-    kind: "automatic",
+    scrapingEnabled: true,
     defaultQuantity: "1",
     manualPrice: "",
     note: "",
@@ -60,7 +58,6 @@ function toFormState(item?: ItemDetail): FormState {
     unit: item?.unit ?? "pcs",
     targetPrice: item?.targetPrice?.toString() ?? "",
     comparisonQuantity: item?.comparisonQuantity?.toString() ?? "1",
-    updateMode: item?.updateMode ?? "Automatic",
     checkIntervalMinutes: item?.checkIntervalMinutes?.toString() ?? "",
     trackingEnabled: item?.trackingEnabled ?? true,
   };
@@ -74,7 +71,7 @@ function toSourceDrafts(item?: ItemDetail): SourceDraft[] {
     key: String(source.id),
     store: source.store,
     url: source.url ?? "",
-    kind: !source.scrapingEnabled && source.manualPrice !== null ? "manual" : "automatic",
+    scrapingEnabled: source.scrapingEnabled,
     defaultQuantity: source.defaultQuantity.toString(),
     manualPrice: source.manualPrice?.toString() ?? "",
     note: source.note ?? "",
@@ -104,6 +101,8 @@ export function ItemFormPage({
     return price / quantity;
   }, [form.targetPrice, form.comparisonQuantity]);
 
+  const hasScrapingSources = sources.some((source) => source.scrapingEnabled);
+
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
@@ -130,8 +129,9 @@ export function ItemFormPage({
         unit: emptyToNull(form.unit),
         targetPrice: toNullableNumber(form.targetPrice),
         comparisonQuantity: Number(form.comparisonQuantity),
-        updateMode: form.updateMode,
-        checkIntervalMinutes: toNullableInteger(form.checkIntervalMinutes),
+        checkIntervalMinutes: hasScrapingSources
+          ? toNullableInteger(form.checkIntervalMinutes)
+          : null,
         trackingEnabled: form.trackingEnabled,
       };
 
@@ -159,9 +159,9 @@ export function ItemFormPage({
         const payload = {
           store: source.store.trim(),
           url: emptyToNull(source.url),
-          scrapingEnabled: source.kind === "automatic",
+          scrapingEnabled: source.scrapingEnabled,
           defaultQuantity: Number(source.defaultQuantity),
-          manualPrice: source.kind === "manual" ? toNullableNumber(source.manualPrice) : null,
+          manualPrice: source.scrapingEnabled ? null : toNullableNumber(source.manualPrice),
           note: emptyToNull(source.note),
         };
 
@@ -203,8 +203,12 @@ export function ItemFormPage({
         throw new Error(`Source "${source.store}" needs a quantity greater than zero.`);
       }
 
-      if (source.kind === "manual" && toNullableNumber(source.manualPrice) === null) {
-        throw new Error(`Manual source "${source.store}" needs a manual price.`);
+      if (!source.scrapingEnabled && toNullableNumber(source.manualPrice) === null) {
+        throw new Error(`Source "${source.store}" needs a price when scraping is off.`);
+      }
+
+      if (source.scrapingEnabled && !source.url.trim()) {
+        throw new Error(`Source "${source.store}" needs a URL when scraping is on.`);
       }
     }
   }
@@ -218,8 +222,7 @@ export function ItemFormPage({
           href={initialItem ? `/items/${initialItem.id}` : "/"}
           className={buttonVariants({ variant: "ghost", size: "sm", className: "-ml-2" })}
         >
-          <ArrowLeft className="size-4" />
-          {initialItem ? "Product" : "Products"}
+{initialItem ? "Product" : "Products"}
         </Link>
 
         <div className="mt-4">
@@ -247,20 +250,6 @@ export function ItemFormPage({
             <CardContent className="grid gap-5 sm:grid-cols-2">
               <Field label="Name" full>
                 <Input value={form.name} onChange={(event) => updateForm("name", event.target.value)} />
-              </Field>
-
-              <Field label="Update mode">
-                <Select value={form.updateMode} onValueChange={(value) => updateForm("updateMode", value as UpdateMode)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    <SelectItem value="Manual">Manual</SelectItem>
-                    <SelectItem value="Automatic">Automatic</SelectItem>
-                    <SelectItem value="Hybrid">Hybrid</SelectItem>
-                  </SelectContent>
-                </Select>
               </Field>
 
               <Field label="Currency">
@@ -346,10 +335,14 @@ export function ItemFormPage({
                   type="number"
                   min="1"
                   step="1"
-                  placeholder="Optional"
+                  placeholder={hasScrapingSources ? "Every scheduled run" : "Not used while scraping is off"}
                   value={form.checkIntervalMinutes}
+                  disabled={!hasScrapingSources}
                   onChange={(event) => updateForm("checkIntervalMinutes", event.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  At least one source with Scraping ON enables scheduled scraping. Leave empty to run on every scheduler invocation.
+                </p>
               </Field>
             </CardContent>
           </Card>
@@ -365,7 +358,6 @@ export function ItemFormPage({
                   size="sm"
                   onClick={() => setSources((current) => [...current, createEmptySource()])}
                 >
-                  <Plus className="size-4" />
                   Add source
                 </Button>
               </div>
@@ -406,26 +398,15 @@ export function ItemFormPage({
                         />
                       </Field>
 
-                      <Field label="Price source">
-                        <Select
-                          value={source.kind}
-                          onValueChange={(value) =>
-                            updateSource(source.key, {
-                              kind: value as "automatic" | "manual",
-                              manualPrice: value === "automatic" ? "" : source.manualPrice,
-                            })
+                      <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                        <Label>Scraping {source.scrapingEnabled ? "ON" : "OFF"}</Label>
+                        <Switch
+                          checked={source.scrapingEnabled}
+                          onCheckedChange={(value) =>
+                            updateSource(source.key, { scrapingEnabled: value })
                           }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-
-                          <SelectContent>
-                            <SelectItem value="automatic">Automatic</SelectItem>
-                            <SelectItem value="manual">Manual</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </Field>
+                        />
+                      </div>
 
                       <Field label="URL" full>
                         <Input
@@ -447,8 +428,8 @@ export function ItemFormPage({
                         />
                       </Field>
 
-                      {source.kind === "manual" && (
-                        <Field label="Manual price">
+                      {!source.scrapingEnabled && (
+                        <Field label="Price">
                           <Input
                             type="number"
                             min="0"

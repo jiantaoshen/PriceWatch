@@ -1,3 +1,5 @@
+using PriceWatch.Private.Models;
+
 namespace PriceWatch.Private.Services;
 
 public sealed record CoordinatorStatus(
@@ -101,7 +103,7 @@ public sealed class ScrapeRunCoordinator
                 var orchestrator = scope.ServiceProvider
                     .GetRequiredService<ScrapeOrchestrator>();
 
-                var runId = await orchestrator.RunOnceAsync();
+                var runId = await orchestrator.RunOnceAsync(ScrapeTrigger.OnDemand);
 
                 lock (_gate)
                 {

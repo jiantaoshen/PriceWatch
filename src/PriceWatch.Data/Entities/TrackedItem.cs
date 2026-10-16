@@ -57,8 +57,6 @@ public class TrackedItem
     // Tracking
     // -------------------------
 
-    public UpdateMode UpdateMode { get; set; } = UpdateMode.Manual;
-
     public int? CheckIntervalMinutes { get; set; }
 
     public bool TrackingEnabled { get; set; } = true;

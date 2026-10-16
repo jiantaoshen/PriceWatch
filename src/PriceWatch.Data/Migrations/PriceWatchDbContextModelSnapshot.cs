@@ -471,12 +471,6 @@ namespace PriceWatch.Data.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("unit");
 
-                    b.Property<string>("UpdateMode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("update_mode");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");

@@ -19,8 +19,7 @@ export type CoordinatorStatus = {
 export type DashboardData = {
   coordinator: CoordinatorStatus;
   activeItems: number;
-  automaticSources: number;
-  manualSources: number;
+  scrapingSources: number;
   pendingReviews: number;
   lastRun: RunSummary | null;
 };
@@ -36,14 +35,12 @@ export type PrivateItem = {
   previousUnitPrice: number | null;
   currentStore: string | null;
   sourceCount: number;
-  automaticSourceCount: number;
-  manualSourceCount: number;
-  updateMode: "manual" | "automatic" | "hybrid";
+  hasScrapingSources: boolean;
+  checkIntervalMinutes: number | null;
   trackingEnabled: boolean;
   lastCheckedAt: string | null;
   lastPriceChangedAt: string | null;
   archivedAt: string | null;
-  belowTarget: boolean;
 };
 
 export type RunResult = {
