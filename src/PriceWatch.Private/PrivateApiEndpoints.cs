@@ -26,24 +26,7 @@ public static class PrivateApiEndpoints
         group.MapGet("/runs/{id:guid}/results", RunResultsAsync);
         group.MapGet("/status", StatusAsync);
 
-        group.MapPost("/run", (
-            ScrapeRunCoordinator coordinator) =>
-        {
-            if (!coordinator.TryStart())
-            {
-                return Results.Conflict(new
-                {
-                    error = "A PriceWatch run is already in progress."
-                });
-            }
-
-            return Results.Accepted(
-                "/api/private/status",
-                new
-                {
-                    status = "started"
-                });
-        });
+        group.MapPost("/run", StartRunAsync);
 
         group.MapGet("/schedule", async (
             WindowsScheduleService schedule) =>
@@ -81,6 +64,29 @@ public static class PrivateApiEndpoints
         });
 
         return endpoints;
+    }
+
+    private static async Task<IResult> StartRunAsync(
+        ScrapeRunCoordinator coordinator,
+        CancellationToken ct)
+    {
+        var result = await coordinator.TryStartAsync(ct);
+
+        if (result == ScrapeStartResult.AlreadyRunning)
+        {
+            return Results.Conflict(new
+            {
+                error = "A PriceWatch run is already in progress.",
+                reason = "already_running"
+            });
+        }
+
+        return Results.Accepted(
+            "/api/private/status",
+            new
+            {
+                status = "started"
+            });
     }
 
     private static async Task<IResult> DashboardAsync(

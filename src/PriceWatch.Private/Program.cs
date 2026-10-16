@@ -79,6 +79,7 @@ builder.Services.AddScoped<PriceValidationService>();
 builder.Services.AddScoped<OfferSelectionService>();
 builder.Services.AddScoped<ScrapeOrchestrator>();
 
+builder.Services.AddSingleton<PostgreSqlScrapeLock>();
 builder.Services.AddSingleton<ScrapeRunCoordinator>();
 builder.Services.AddSingleton<PrivatePaths>();
 builder.Services.AddSingleton<WindowsScheduleService>();
@@ -89,21 +90,39 @@ app.UseExceptionHandler();
 
 if (runOnce)
 {
-    using var scope = app.Services.CreateScope();
-    var orchestrator = scope.ServiceProvider
-        .GetRequiredService<ScrapeOrchestrator>();
+    var logger = app.Services
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("PriceWatch.Private.RunOnce");
 
     try
     {
+        var scrapeLock = app.Services
+            .GetRequiredService<PostgreSqlScrapeLock>();
+
+        await using var globalLock =
+            await scrapeLock.TryAcquireAsync();
+
+        if (globalLock is null)
+        {
+            logger.LogInformation(
+                "Scheduled scrape skipped because another run already holds the global lock.");
+
+            Console.WriteLine(
+                "PriceWatch run skipped: another scrape run is already active.");
+
+            return;
+        }
+
+        using var scope = app.Services.CreateScope();
+        var orchestrator = scope.ServiceProvider
+            .GetRequiredService<ScrapeOrchestrator>();
+
         var runId = await orchestrator.RunOnceAsync();
         Console.WriteLine($"PriceWatch run completed: {runId}");
     }
     catch (Exception exception)
     {
         var errorId = Guid.NewGuid();
-        var logger = scope.ServiceProvider
-            .GetRequiredService<ILoggerFactory>()
-            .CreateLogger("PriceWatch.Private.RunOnce");
 
         logger.LogError(
             "Scheduled scrape run failed. ErrorId={ErrorId}, Type={ExceptionType}, StackTrace={StackTrace}",
