@@ -20,6 +20,7 @@ public sealed class PriceUpdateService
         PriceOrigin origin,
         long? sourceId = null,
         long? scrapeResultId = null,
+        DateTimeOffset? observedAt = null,
         CancellationToken cancellationToken = default)
     {
         if (quantity <= 0)
@@ -45,6 +46,7 @@ public sealed class PriceUpdateService
         }
 
         var now = DateTimeOffset.UtcNow;
+        var successfulPriceAt = observedAt ?? now;
 
 
         // normalized price 没变：
@@ -56,7 +58,7 @@ public sealed class PriceUpdateService
             item.CurrentQuantity = quantity;
             item.CurrentSourceId = sourceId;
 
-            item.LastSuccessfulPriceAt = now;
+            item.LastSuccessfulPriceAt = successfulPriceAt;
             item.UpdatedAt = now;
 
             return;
@@ -74,7 +76,7 @@ public sealed class PriceUpdateService
         item.CurrentQuantity = quantity;
         item.CurrentSourceId = sourceId;
 
-        item.LastSuccessfulPriceAt = now;
+        item.LastSuccessfulPriceAt = successfulPriceAt;
         item.LastPriceChangedAt = now;
         item.UpdatedAt = now;
 

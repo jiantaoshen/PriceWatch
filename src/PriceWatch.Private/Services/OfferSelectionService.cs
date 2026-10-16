@@ -11,6 +11,7 @@ public sealed record AcceptedOfferCandidate(
     decimal Quantity,
     decimal UnitPrice,
     PriceOrigin Origin,
+    DateTimeOffset ObservedAt,
     bool IsCurrentSource);
 
 public sealed class OfferSelectionService
@@ -24,6 +25,7 @@ public sealed class OfferSelectionService
 
     public async Task<AcceptedOfferCandidate?> GetBestAcceptedOfferAsync(
         Guid itemId,
+        Guid runId,
         CancellationToken ct = default)
     {
         var item = await _db.TrackedItems
@@ -64,6 +66,7 @@ public sealed class OfferSelectionService
                     source.DefaultQuantity,
                     source.ManualPrice.Value / source.DefaultQuantity,
                     PriceOrigin.Manual,
+                    source.UpdatedAt,
                     item.CurrentSourceId == source.Id));
 
                 continue;
@@ -79,6 +82,7 @@ public sealed class OfferSelectionService
                 .Where(x =>
                     x.ItemId == itemId &&
                     x.SourceId == source.Id &&
+                    x.RunId == runId &&
                     (
                         x.ReviewStatus == ReviewStatus.NotRequired ||
                         x.ReviewStatus == ReviewStatus.Accepted ||
@@ -92,7 +96,8 @@ public sealed class OfferSelectionService
                     x.ScrapedQuantity,
                     x.ManualPrice,
                     x.ManualQuantity,
-                    x.ReviewStatus
+                    x.ReviewStatus,
+                    x.CreatedAt
                 })
                 .FirstOrDefaultAsync(ct);
 
@@ -138,6 +143,7 @@ public sealed class OfferSelectionService
                 quantity.Value,
                 price.Value / quantity.Value,
                 origin,
+                result.CreatedAt,
                 item.CurrentSourceId == source.Id));
         }
 

@@ -186,6 +186,9 @@ public class ReviewsController : ControllerBase
             scrapeResultId:
                 result.Id,
 
+            observedAt:
+                result.CreatedAt,
+
             cancellationToken: ct);
 
 
@@ -346,6 +349,9 @@ public class ReviewsController : ControllerBase
 
             scrapeResultId:
                 result.Id,
+
+            observedAt:
+                now,
 
             cancellationToken:
                 ct);

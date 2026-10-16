@@ -223,6 +223,7 @@ public sealed class ScrapeOrchestrator
 
                 var best = await _offers.GetBestAcceptedOfferAsync(
                     item.Id,
+                    run.Id,
                     ct);
 
                 if (best is not null)
@@ -234,6 +235,7 @@ public sealed class ScrapeOrchestrator
                         best.Origin,
                         sourceId: best.SourceId,
                         scrapeResultId: best.ScrapeResultId,
+                        observedAt: best.ObservedAt,
                         cancellationToken: ct);
 
                     await _db.SaveChangesAsync(ct);
