@@ -1,11 +1,5 @@
 "use client";
 
-import {
-  CircleAlert,
-  CreditCard,
-  Package,
-  Tag,
-} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AuthButton } from "@/components/auth-button";
@@ -15,7 +9,6 @@ const navigation = [
   {
     label: "Products",
     href: "/",
-    icon: Package,
     isActive: (pathname: string) =>
       pathname === "/" ||
       pathname.startsWith("/items"),
@@ -23,14 +16,12 @@ const navigation = [
   {
     label: "Subscriptions",
     href: "/subscriptions",
-    icon: CreditCard,
     isActive: (pathname: string) =>
       pathname.startsWith("/subscriptions"),
   },
   {
     label: "Reviews",
     href: "/reviews",
-    icon: CircleAlert,
     isActive: (pathname: string) =>
       pathname.startsWith("/reviews"),
   },
@@ -45,15 +36,9 @@ export function SiteHeader() {
         <div className="flex min-w-0 items-center gap-5 lg:gap-8">
           <Link
             href="/"
-            className="flex shrink-0 items-center gap-2.5"
+            className="flex shrink-0 items-center font-semibold tracking-tight"
           >
-            <div className="flex size-9 items-center justify-center rounded-xl border bg-muted/40">
-              <Tag className="size-4" />
-            </div>
-
-            <span className="hidden text-base font-semibold tracking-tight sm:inline">
-              PriceWatch
-            </span>
+            PriceWatch
           </Link>
 
           <nav
@@ -61,7 +46,6 @@ export function SiteHeader() {
             className="flex min-w-0 items-center gap-1 overflow-x-auto"
           >
             {navigation.map((item) => {
-              const Icon = item.icon;
               const active =
                 item.isActive(pathname);
 
@@ -81,7 +65,6 @@ export function SiteHeader() {
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                   )}
                 >
-                  <Icon className="size-4" />
                   <span>
                     {item.label}
                   </span>

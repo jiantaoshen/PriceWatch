@@ -11,9 +11,6 @@ using PriceWatch.Private.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load user-secrets even for --run-once executions started by Task Scheduler.
-builder.Configuration.AddUserSecrets<Program>(optional: true);
-
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 

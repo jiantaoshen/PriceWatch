@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using PriceWatch.Private.Models;
 
 namespace PriceWatch.Private.Services;
@@ -12,10 +12,14 @@ public sealed class WindowsScheduleService
     private const string TaskName = "PriceWatch Private Scrape";
 
     private readonly PrivatePaths _paths;
+    private readonly PrivateSettings _settings;
 
-    public WindowsScheduleService(PrivatePaths paths)
+    public WindowsScheduleService(
+        PrivatePaths paths,
+        IOptions<PrivateSettings> settings)
     {
         _paths = paths;
+        _settings = settings.Value;
     }
 
     public async Task<ScheduleStatus> GetAsync()
@@ -212,33 +216,36 @@ public sealed class WindowsScheduleService
         }
     }
 
-    private static LaunchCommand GetLaunchCommand()
+    private LaunchCommand GetLaunchCommand()
     {
-        var processPath = Environment.ProcessPath
-                          ?? throw new InvalidOperationException(
-                              "Unable to determine current process path.");
+        var repoRoot = _settings.RepoRoot?.Trim();
+        var nodeExecutable = _settings.NodeExecutable?.Trim();
+        var launcherScript = _settings.LauncherScript?.Trim();
 
-        var assemblyPath = Assembly.GetEntryAssembly()?.Location
-                           ?? throw new InvalidOperationException(
-                               "Unable to determine PriceWatch.Private assembly path.");
-
-        var workingDirectory = AppContext.BaseDirectory;
-
-        if (string.Equals(
-                Path.GetFileNameWithoutExtension(processPath),
-                "dotnet",
-                StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(repoRoot) ||
+            string.IsNullOrWhiteSpace(nodeExecutable) ||
+            string.IsNullOrWhiteSpace(launcherScript))
         {
-            return new LaunchCommand(
-                processPath,
-                $"\"{assemblyPath}\" --run-once",
-                workingDirectory);
+            throw new InvalidOperationException(
+                "Scheduled runs require the repository launcher. Start PriceWatch.Private via npm run dev:private:all or npm run dev:private:api before creating the task.");
+        }
+
+        if (!Directory.Exists(repoRoot) || !File.Exists(launcherScript))
+        {
+            throw new InvalidOperationException(
+                "PriceWatch repository launcher could not be found. Recreate the scheduled task from a launcher-started Private instance.");
+        }
+
+        if (!File.Exists(nodeExecutable))
+        {
+            throw new InvalidOperationException(
+                "Node.js executable could not be found. Recreate the scheduled task after verifying the local Node.js installation.");
         }
 
         return new LaunchCommand(
-            processPath,
-            "--run-once",
-            workingDirectory);
+            nodeExecutable,
+            $"\"{launcherScript}\" private run-once",
+            repoRoot);
     }
 
     private static async Task RunPowerShellOrThrowAsync(

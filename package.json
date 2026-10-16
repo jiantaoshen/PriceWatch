@@ -17,15 +17,12 @@
     "dev:web:api": "node scripts/dev-stack.mjs web backend",
     "dev:web:all": "node scripts/dev-stack.mjs web all",
     "dev:private:api": "node scripts/dev-stack.mjs private backend",
+    "private:run-once": "node scripts/dev-stack.mjs private run-once",
     "dev:private:all": "node scripts/dev-stack.mjs private all",
     "db:update": "node scripts/dev-stack.mjs web migrate"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
     "lightningcss-linux-x64-gnu": "1.32.0"
-  },
-  "dependencies": {
-    "eslint-config-next": "^16.3.8",
-    "next": "^16.3.8"
   }
 }

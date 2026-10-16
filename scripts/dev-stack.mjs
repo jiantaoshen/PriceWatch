@@ -80,59 +80,7 @@ function requireOneOf(env, names, context) {
   process.exit(1);
 }
 
-function buildWebEnv(source, part) {
-  const env = { ...source };
-  const apiUrl = source.WEB_API_URL || "http://localhost:5128";
-  const frontendUrl = source.WEB_FRONTEND_URL || "http://localhost:3000";
-
-  if (part !== "frontend") {
-    requireValues(source, ["DATABASE_CONNECTION_STRING"], "web backend");
-    requireOneOf(source, ["OWNER_SUB", "OWNER_OID"], "web backend owner identity");
-  }
-
-  if (part !== "backend" && part !== "migrate") {
-    requireValues(
-      source,
-      ["WEB_MICROSOFT_CLIENT_ID", "WEB_API_SCOPE"],
-      "web frontend"
-    );
-  }
-
-  assignIfPresent(env, "ConnectionStrings__Database", source.DATABASE_CONNECTION_STRING);
-  assignIfPresent(env, "Owner__Sub", source.OWNER_SUB);
-  assignIfPresent(env, "Owner__Oid", source.OWNER_OID);
-  assignIfPresent(env, "AzureAd__ClientId", source.API_MICROSOFT_CLIENT_ID);
-  assignIfPresent(env, "AzureAd__TenantId", source.API_MICROSOFT_TENANT);
-
-  env.ASPNETCORE_ENVIRONMENT = source.ASPNETCORE_ENVIRONMENT || "Development";
-  env.ASPNETCORE_URLS = apiUrl;
-  env.Frontend__Origin = frontendUrl;
-
-  env.NEXT_PUBLIC_API_URL = apiUrl;
-  env.NEXT_PUBLIC_MICROSOFT_CLIENT_ID = source.WEB_MICROSOFT_CLIENT_ID || "";
-  env.NEXT_PUBLIC_MICROSOFT_TENANT = source.WEB_MICROSOFT_TENANT || "consumers";
-  env.NEXT_PUBLIC_API_SCOPE = source.WEB_API_SCOPE || "";
-  env.NEXT_PUBLIC_MICROSOFT_REDIRECT_URI =
-    source.WEB_MICROSOFT_REDIRECT_URI || `${frontendUrl.replace(/\/$/, "")}/redirect`;
-
-  return env;
-}
-
-function buildPrivateEnvs(source, part) {
-  const apiUrl = source.PRIVATE_API_URL || "http://127.0.0.1:5188";
-  const frontendUrl = source.PRIVATE_FRONTEND_URL || "http://127.0.0.1:3001";
-  const cloudUrl = source.WEB_FRONTEND_URL || "http://localhost:3000";
-  const apiToken = String(source.PRIVATE_API_TOKEN || "").trim();
-
-  if (!apiToken || apiToken.length < 32) {
-    console.error("Missing or weak private API token in .env.local.");
-    console.error("Set PRIVATE_API_TOKEN to at least 32 characters.");
-    process.exit(1);
-  }
-
-  const backendEnv = { ...process.env };
-  const frontendEnv = { ...process.env };
-
+function removeAppSecrets(env) {
   for (const key of [
     "DATABASE_CONNECTION_STRING",
     "ConnectionStrings__Database",
@@ -142,9 +90,98 @@ function buildPrivateEnvs(source, part) {
     "API_MICROSOFT_TENANT",
     "AzureAd__ClientId",
     "AzureAd__TenantId",
+    "PRIVATE_API_TOKEN",
+    "Private__ApiToken",
   ]) {
-    delete frontendEnv[key];
+    delete env[key];
   }
+
+  return env;
+}
+
+function buildWebEnvs(source, part) {
+  const apiUrl = source.WEB_API_URL || "http://localhost:5128";
+  const frontendUrl = source.WEB_FRONTEND_URL || "http://localhost:3000";
+  const backendEnv = { ...process.env };
+  const frontendEnv = removeAppSecrets({ ...process.env });
+
+  if (part === "backend" || part === "all") {
+    requireValues(source, ["DATABASE_CONNECTION_STRING"], "web backend");
+    requireOneOf(source, ["OWNER_SUB", "OWNER_OID"], "web backend owner identity");
+  }
+
+  if (part === "migrate") {
+    requireValues(source, ["DATABASE_CONNECTION_STRING"], "database migration");
+  }
+
+  if (part === "frontend" || part === "all") {
+    requireValues(
+      source,
+      ["WEB_MICROSOFT_CLIENT_ID", "WEB_API_SCOPE"],
+      "web frontend"
+    );
+  }
+
+  if (part !== "frontend") {
+    assignIfPresent(
+      backendEnv,
+      "ConnectionStrings__Database",
+      source.DATABASE_CONNECTION_STRING
+    );
+    assignIfPresent(backendEnv, "Owner__Sub", source.OWNER_SUB);
+    assignIfPresent(backendEnv, "Owner__Oid", source.OWNER_OID);
+    assignIfPresent(
+      backendEnv,
+      "AzureAd__ClientId",
+      source.API_MICROSOFT_CLIENT_ID
+    );
+    assignIfPresent(
+      backendEnv,
+      "AzureAd__TenantId",
+      source.API_MICROSOFT_TENANT
+    );
+
+    backendEnv.ASPNETCORE_ENVIRONMENT =
+      source.ASPNETCORE_ENVIRONMENT || "Development";
+    backendEnv.ASPNETCORE_URLS = apiUrl;
+    backendEnv.Frontend__Origin = frontendUrl;
+  }
+
+  if (part === "frontend" || part === "all") {
+    frontendEnv.NEXT_PUBLIC_API_URL = apiUrl;
+    frontendEnv.NEXT_PUBLIC_MICROSOFT_CLIENT_ID =
+      source.WEB_MICROSOFT_CLIENT_ID || "";
+    frontendEnv.NEXT_PUBLIC_MICROSOFT_TENANT =
+      source.WEB_MICROSOFT_TENANT || "consumers";
+    frontendEnv.NEXT_PUBLIC_API_SCOPE = source.WEB_API_SCOPE || "";
+    frontendEnv.NEXT_PUBLIC_MICROSOFT_REDIRECT_URI =
+      source.WEB_MICROSOFT_REDIRECT_URI ||
+      `${frontendUrl.replace(/\/$/, "")}/redirect`;
+  }
+
+  return {
+    apiUrl,
+    frontendUrl,
+    backendEnv,
+    frontendEnv,
+  };
+}
+
+function buildPrivateEnvs(source, part) {
+  const apiUrl = source.PRIVATE_API_URL || "http://127.0.0.1:5188";
+  const frontendUrl = source.PRIVATE_FRONTEND_URL || "http://127.0.0.1:3001";
+  const cloudUrl = source.WEB_FRONTEND_URL || "http://localhost:3000";
+  const apiToken = String(source.PRIVATE_API_TOKEN || "").trim();
+  const requiresApiToken = part !== "run-once";
+
+  if (requiresApiToken && (!apiToken || apiToken.length < 32)) {
+    console.error("Missing or weak private API token in .env.local.");
+    console.error("Set PRIVATE_API_TOKEN to at least 32 characters.");
+    process.exit(1);
+  }
+
+  const backendEnv = { ...process.env };
+  const frontendEnv = removeAppSecrets({ ...process.env });
 
   if (part !== "frontend") {
     requireValues(source, ["DATABASE_CONNECTION_STRING"], "private backend");
@@ -183,9 +220,20 @@ function buildPrivateEnvs(source, part) {
     backendEnv.ASPNETCORE_ENVIRONMENT =
       source.ASPNETCORE_ENVIRONMENT || "Development";
     backendEnv.ASPNETCORE_URLS = apiUrl;
+
+    // The Private API uses these values when creating a Windows scheduled task.
+    // The task launches this Node entry point again so every run reloads the
+    // repository-root .env.local instead of depending on dotnet user-secrets.
+    backendEnv.Private__RepoRoot = repoRoot;
+    backendEnv.Private__NodeExecutable = process.execPath;
+    backendEnv.Private__LauncherScript = path.join(
+      repoRoot,
+      "scripts",
+      "dev-stack.mjs"
+    );
   }
 
-  if (part !== "backend") {
+  if (part !== "backend" && part !== "run-once") {
     // Only pass the private proxy configuration to the Next.js server.
     // Database credentials and other backend-only values from .env.local are
     // intentionally not copied into the frontend process environment.
@@ -288,19 +336,35 @@ function startBackend(projectPath, env, label) {
   );
 }
 
+function runPrivateOnce(env) {
+  startProcess(
+    "private-run-once",
+    "dotnet",
+    [
+      "run",
+      "--no-launch-profile",
+      "--project",
+      "src/PriceWatch.Private",
+      "--",
+      "--run-once",
+    ],
+    env
+  );
+}
+
 const [target, part = "all"] = process.argv.slice(2);
 
 if (!(
   ["web", "private"].includes(target) &&
-  ["all", "frontend", "backend", "migrate"].includes(part) &&
-  !(target === "private" && part === "migrate")
+  ["all", "frontend", "backend", "migrate", "run-once"].includes(part) &&
+  !(target === "private" && part === "migrate") &&
+  !(target === "web" && part === "run-once")
 )) {
   console.error(
     "Usage: node scripts/dev-stack.mjs <web|private> <all|frontend|backend>"
   );
-  console.error(
-    "       node scripts/dev-stack.mjs web migrate"
-  );
+  console.error("       node scripts/dev-stack.mjs web migrate");
+  console.error("       node scripts/dev-stack.mjs private run-once");
   process.exit(1);
 }
 
@@ -310,7 +374,12 @@ process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
 if (target === "web") {
-  const env = buildWebEnv(sourceEnv, part);
+  const {
+    apiUrl,
+    frontendUrl,
+    backendEnv,
+    frontendEnv,
+  } = buildWebEnvs(sourceEnv, part);
 
   if (part === "migrate") {
     console.log("PriceWatch database migration");
@@ -326,18 +395,18 @@ if (target === "web") {
         "--startup-project",
         "src/PriceWatch.WebApi",
       ],
-      env
+      backendEnv
     );
   } else {
     console.log("PriceWatch web local development");
-    console.log(`  frontend: ${env.WEB_FRONTEND_URL || "http://localhost:3000"}`);
-    console.log(`  api:      ${env.WEB_API_URL || "http://localhost:5128"}`);
+    console.log(`  frontend: ${frontendUrl}`);
+    console.log(`  api:      ${apiUrl}`);
 
     if (part !== "frontend") {
-      startBackend("src/PriceWatch.WebApi", env, "web-api");
+      startBackend("src/PriceWatch.WebApi", backendEnv, "web-api");
     }
     if (part !== "backend") {
-      startFrontend("web", env, "web");
+      startFrontend("web", frontendEnv, "web");
     }
   }
 } else {
@@ -348,14 +417,19 @@ if (target === "web") {
     frontendEnv,
   } = buildPrivateEnvs(sourceEnv, part);
 
-  console.log("PriceWatch private local development");
-  console.log(`  frontend: ${frontendUrl}`);
-  console.log(`  api:      ${apiUrl}`);
+  if (part === "run-once") {
+    console.log("PriceWatch private scheduled run");
+    runPrivateOnce(backendEnv);
+  } else {
+    console.log("PriceWatch private local development");
+    console.log(`  frontend: ${frontendUrl}`);
+    console.log(`  api:      ${apiUrl}`);
 
-  if (part !== "frontend") {
-    startBackend("src/PriceWatch.Private", backendEnv, "private-api");
-  }
-  if (part !== "backend") {
-    startFrontend("pricewatch-private-web", frontendEnv, "private-web");
+    if (part !== "frontend") {
+      startBackend("src/PriceWatch.Private", backendEnv, "private-api");
+    }
+    if (part !== "backend") {
+      startFrontend("pricewatch-private-web", frontendEnv, "private-web");
+    }
   }
 }
