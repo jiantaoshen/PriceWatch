@@ -3,6 +3,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from playwright.async_api import Request, Route, async_playwright
 
@@ -64,6 +65,10 @@ def _load_request():
     )
 
 
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _blocked_result(job: Job):
     return {
         "item_id": job.item_id,
@@ -73,6 +78,7 @@ def _blocked_result(job: Job):
         "method": None,
         "final_url": None,
         "error": "Blocked unsafe network target.",
+        "observed_at": _now_iso(),
     }
 
 
@@ -188,6 +194,7 @@ async def _run():
                             "method": None,
                             "final_url": page.url,
                             "error": "Could not extract a product price.",
+                            "observed_at": _now_iso(),
                         })
                     else:
                         results.append({
@@ -198,6 +205,7 @@ async def _run():
                             "method": method,
                             "final_url": page.url,
                             "error": None,
+                            "observed_at": _now_iso(),
                         })
                 except UnsafeNetworkTargetError:
                     results.append(_blocked_result(job))
@@ -213,6 +221,7 @@ async def _run():
                             "method": None,
                             "final_url": None,
                             "error": str(error),
+                            "observed_at": _now_iso(),
                         })
         finally:
             await context.close()

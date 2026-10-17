@@ -59,9 +59,9 @@ builder.Services.AddDbContextPool<PriceWatchDbContext>(options =>
 // Core services
 // ============================================================
 
-builder.Services.AddScoped<PriceUpdateService>();
-builder.Services.AddScoped<OfferSelectionService>();
 
+
+builder.Services.AddScoped<PriceTrackingService>();
 
 // ============================================================
 // Microsoft Authentication

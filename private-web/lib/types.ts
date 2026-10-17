@@ -9,15 +9,11 @@ export type RunSummary = {
   failed: number;
 };
 
-export type CoordinatorStatus = {
-  running: boolean;
-  currentRunId: string | null;
-  startedAt: string | null;
-  lastError: string | null;
-};
-
 export type DashboardData = {
-  coordinator: CoordinatorStatus;
+  coordinator: {
+    isRunning: boolean;
+    startedAt: string | null;
+  };
   activeItems: number;
   scrapingSources: number;
   pendingReviews: number;
@@ -33,7 +29,7 @@ export type PrivateItem = {
   targetUnitPrice: number | null;
   currentUnitPrice: number | null;
   previousUnitPrice: number | null;
-  currentStore: string | null;
+  currentStores: string[];
   sourceCount: number;
   hasScrapingSources: boolean;
   checkIntervalMinutes: number | null;
@@ -47,8 +43,8 @@ export type RunResult = {
   id: number;
   itemId: string;
   itemName: string;
-  sourceId: number | null;
-  store: string | null;
+  sourceId: number;
+  store: string;
   resultStatus: "success" | "suspicious" | "failed";
   reviewStatus: "notRequired" | "pending" | "accepted" | "rejected" | "manualOverride";
   scrapedPrice: number | null;
@@ -56,14 +52,17 @@ export type RunResult = {
   scrapedUnitPrice: number | null;
   suspiciousReason: string | null;
   error: string | null;
+  observedAt: string;
   createdAt: string;
   reviewedAt: string | null;
 };
 
-export type ScheduleStatus = {
-  taskExists: boolean;
+export type ScheduleData = {
+  exists: boolean;
   enabled: boolean;
-  day: string;
+  dayOfWeek: number;
   time: string;
-  runIfMissed: boolean;
+  nextRunTime: string | null;
+  lastRunTime: string | null;
+  lastTaskResult: number | null;
 };

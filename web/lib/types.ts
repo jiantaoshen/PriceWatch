@@ -1,6 +1,4 @@
-export type ItemType =
-  | "Product"
-  | "Subscription";
+export type ItemType = "Product" | "Subscription";
 
 export type ItemListItem = {
   id: string;
@@ -8,24 +6,18 @@ export type ItemListItem = {
   name: string;
   currency: string;
   unit: string | null;
-
   targetUnitPrice: number | null;
   currentUnitPrice: number | null;
   previousUnitPrice: number | null;
-
   monthlyPrice: number | null;
-
-  currentStore: string | null;
+  currentStores: string[];
   sourceCount: number;
   hasScrapingSources: boolean;
-
   checkIntervalMinutes: number | null;
   trackingEnabled: boolean;
-
   lastCheckedAt: string | null;
   lastSuccessfulPriceAt: string | null;
   lastPriceChangedAt: string | null;
-
   archivedAt: string | null;
 };
 
@@ -35,8 +27,8 @@ export type ItemSourceDetail = {
   url: string | null;
   scrapingEnabled: boolean;
   defaultQuantity: number;
-  manualPrice: number | null;
   note: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,40 +39,31 @@ export type ItemDetail = {
   name: string;
   currency: string;
   unit: string | null;
-
   targetPrice: number | null;
   comparisonQuantity: number;
   targetUnitPrice: number | null;
-
   currentPrice: number | null;
   currentQuantity: number | null;
   currentUnitPrice: number | null;
-  currentSourceId: number | null;
-  currentStore: string | null;
-
+  currentStores: string[];
   previousPrice: number | null;
   previousQuantity: number | null;
   previousUnitPrice: number | null;
-  previousSourceId: number | null;
-  previousStore: string | null;
-
   checkIntervalMinutes: number | null;
   trackingEnabled: boolean;
-
   lastCheckedAt: string | null;
   lastSuccessfulPriceAt: string | null;
   lastPriceChangedAt: string | null;
-
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
-
   sources: ItemSourceDetail[];
 };
 
 export type PriceHistoryPoint = {
   recordedAt: string;
   unitPrice: number;
+  stores: string[];
 };
 
 export type SourceOffer = {
@@ -89,34 +72,38 @@ export type SourceOffer = {
   url: string | null;
   note: string | null;
   scrapingEnabled: boolean;
+  defaultQuantity: number;
   price: number | null;
   quantity: number | null;
   unitPrice: number | null;
+  origin: "Scrape" | "Manual" | null;
   observedAt: string | null;
-  isCurrent: boolean;
+  hasPendingReview: boolean;
+  isBest: boolean;
 };
 
 export type PendingReview = {
   id: number;
   itemId: string;
   itemName: string;
-  sourceId: number | null;
-  store: string | null;
-  resultStatus: string;
+  sourceId: number;
+  store: string;
+  defaultQuantity: number;
+  resultStatus: "Success" | "Suspicious" | "Failed";
   reviewStatus: string;
   scrapedPrice: number | null;
   scrapedQuantity: number | null;
   scrapedUnitPrice: number | null;
   currentUnitPrice: number | null;
   targetUnitPrice: number | null;
+  lastKnownUnitPrice: number | null;
+  hasLastKnownPrice: boolean;
   suspiciousReason: string | null;
   error: string | null;
+  observedAt: string;
   createdAt: string;
-
-  // Recommended additions to ReviewsController output.
-  // Optional so the page still works before that API patch.
-  currency?: string;
-  unit?: string | null;
+  currency: string;
+  unit: string | null;
 };
 
 export type ProductFilter =

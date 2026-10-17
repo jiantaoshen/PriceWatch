@@ -26,7 +26,7 @@ export default function ItemsPage() {
     return query
       ? items.filter((item) =>
           item.name.toLowerCase().includes(query) ||
-          item.currentStore?.toLowerCase().includes(query),
+          item.currentStores.some((store) => store.toLowerCase().includes(query)),
         )
       : items;
   }, [items, search]);
@@ -67,8 +67,8 @@ export default function ItemsPage() {
               <div className="mt-1 text-2xl font-semibold tabular-nums">
                 {formatUnitPrice(item.currentUnitPrice, item.currency, item.unit)}
               </div>
-              {item.currentStore && (
-                <div className="mt-1 text-sm text-muted-foreground">Best at {item.currentStore}</div>
+              {item.currentStores.length > 0 && (
+                <div className="mt-1 text-sm text-muted-foreground">Best at {item.currentStores.join(", ")}</div>
               )}
 
               <div className="mt-5 grid grid-cols-2 gap-3">

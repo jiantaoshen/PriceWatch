@@ -74,10 +74,9 @@ builder.Services.AddDbContext<PriceWatchDbContext>(options =>
         .UseSnakeCaseNamingConvention();
 });
 
-builder.Services.AddScoped<PriceUpdateService>();
+builder.Services.AddScoped<PriceTrackingService>();
 builder.Services.AddScoped<PythonScraperClient>();
 builder.Services.AddScoped<PriceValidationService>();
-builder.Services.AddScoped<OfferSelectionService>();
 builder.Services.AddScoped<ScrapeOrchestrator>();
 builder.Services.AddScoped<ScrapeRunRecoveryService>();
 

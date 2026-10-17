@@ -3,7 +3,10 @@ name: Backend Quality CI
 on:
   pull_request:
     paths:
+      - "src/PriceWatch.Core/**"
+      - "src/PriceWatch.Data/**"
       - "src/PriceWatch.Private/**"
+      - "src/PriceWatch.WebApi/**"
       - "tests/**"
       - "scraper/**"
       - "PriceWatch.slnx"
@@ -14,7 +17,10 @@ on:
     branches:
       - main
     paths:
+      - "src/PriceWatch.Core/**"
+      - "src/PriceWatch.Data/**"
       - "src/PriceWatch.Private/**"
+      - "src/PriceWatch.WebApi/**"
       - "tests/**"
       - "scraper/**"
       - "PriceWatch.slnx"

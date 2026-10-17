@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace PriceWatch.Data.Entities;
 
 public class ItemSource
@@ -18,10 +16,9 @@ public class ItemSource
 
     public decimal DefaultQuantity { get; set; } = 1m;
 
-    [Precision(18, 4)]
-    public decimal? ManualPrice { get; set; }
-
     public string? Note { get; set; }
+
+    public DateTimeOffset? ArchivedAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

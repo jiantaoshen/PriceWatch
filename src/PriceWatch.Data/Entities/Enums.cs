@@ -9,8 +9,15 @@ public enum ItemType
 public enum PriceOrigin
 {
     Scrape,
+    Manual
+}
+
+public enum BestPriceChangeCause
+{
+    Automatic,
     Manual,
-    ManualOverride
+    Review,
+    SourceChange
 }
 
 public enum ScrapeRunStatus

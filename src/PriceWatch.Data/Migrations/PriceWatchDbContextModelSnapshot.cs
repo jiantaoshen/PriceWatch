@@ -22,6 +22,75 @@ namespace PriceWatch.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PriceWatch.Data.Entities.BestPriceState", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Cause")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("cause");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("unit_price");
+
+                    b.HasKey("Id")
+                        .HasName("pk_best_price_states");
+
+                    b.HasAlternateKey("ItemId", "Id")
+                        .HasName("ak_best_price_states_item_id_id");
+
+                    b.HasIndex("ItemId", "RecordedAt")
+                        .HasDatabaseName("ix_best_price_states_item_id_recorded_at");
+
+                    b.ToTable("best_price_states", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_best_price_states_unit_price_nonnegative", "unit_price >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("PriceWatch.Data.Entities.BestPriceStateSource", b =>
+                {
+                    b.Property<long>("BestPriceStateId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("best_price_state_id");
+
+                    b.Property<long>("SourceId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("source_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.HasKey("BestPriceStateId", "SourceId")
+                        .HasName("pk_best_price_state_sources");
+
+                    b.HasIndex("ItemId", "BestPriceStateId")
+                        .HasDatabaseName("ix_best_price_state_sources_item_id_best_price_state_id");
+
+                    b.HasIndex("ItemId", "SourceId")
+                        .HasDatabaseName("ix_best_price_state_sources_item_id_source_id");
+
+                    b.ToTable("best_price_state_sources", (string)null);
+                });
+
             modelBuilder.Entity("PriceWatch.Data.Entities.ItemSource", b =>
                 {
                     b.Property<long>("Id")
@@ -30,6 +99,10 @@ namespace PriceWatch.Data.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archived_at");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -43,11 +116,6 @@ namespace PriceWatch.Data.Migrations
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uuid")
                         .HasColumnName("item_id");
-
-                    b.Property<decimal?>("ManualPrice")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("manual_price");
 
                     b.Property<string>("Note")
                         .HasColumnType("text")
@@ -74,14 +142,18 @@ namespace PriceWatch.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_item_sources");
 
+                    b.HasAlternateKey("ItemId", "Id")
+                        .HasName("ak_item_sources_item_id_id");
+
                     b.HasIndex("ItemId")
                         .HasDatabaseName("ix_item_sources_item_id");
+
+                    b.HasIndex("ItemId", "ArchivedAt")
+                        .HasDatabaseName("ix_item_sources_item_id_archived_at");
 
                     b.ToTable("item_sources", null, t =>
                         {
                             t.HasCheckConstraint("ck_item_sources_default_quantity_positive", "default_quantity > 0");
-
-                            t.HasCheckConstraint("ck_item_sources_manual_price_nonnegative", "manual_price IS NULL OR manual_price >= 0");
                         });
                 });
 
@@ -94,6 +166,10 @@ namespace PriceWatch.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<long>("BestPriceStateId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("best_price_state_id");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -105,10 +181,6 @@ namespace PriceWatch.Data.Migrations
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uuid")
                         .HasColumnName("item_id");
-
-                    b.Property<long>("PriceHistoryId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("price_history_id");
 
                     b.Property<DateTimeOffset?>("SentAt")
                         .HasColumnType("timestamp with time zone")
@@ -133,12 +205,12 @@ namespace PriceWatch.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_price_alert_events");
 
-                    b.HasIndex("ItemId")
-                        .HasDatabaseName("ix_price_alert_events_item_id");
-
-                    b.HasIndex("PriceHistoryId")
+                    b.HasIndex("BestPriceStateId")
                         .IsUnique()
-                        .HasDatabaseName("ix_price_alert_events_price_history_id");
+                        .HasDatabaseName("ix_price_alert_events_best_price_state_id");
+
+                    b.HasIndex("ItemId", "BestPriceStateId")
+                        .HasDatabaseName("ix_price_alert_events_item_id_best_price_state_id");
 
                     b.ToTable("price_alert_events", null, t =>
                         {
@@ -148,7 +220,7 @@ namespace PriceWatch.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("PriceWatch.Data.Entities.PriceHistory", b =>
+            modelBuilder.Entity("PriceWatch.Data.Entities.PriceObservation", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -160,6 +232,10 @@ namespace PriceWatch.Data.Migrations
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uuid")
                         .HasColumnName("item_id");
+
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
 
                     b.Property<string>("Origin")
                         .IsRequired()
@@ -177,15 +253,11 @@ namespace PriceWatch.Data.Migrations
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("quantity");
 
-                    b.Property<DateTimeOffset>("RecordedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("recorded_at");
-
                     b.Property<long?>("ScrapeResultId")
                         .HasColumnType("bigint")
                         .HasColumnName("scrape_result_id");
 
-                    b.Property<long?>("SourceId")
+                    b.Property<long>("SourceId")
                         .HasColumnType("bigint")
                         .HasColumnName("source_id");
 
@@ -204,11 +276,14 @@ namespace PriceWatch.Data.Migrations
                         .HasDatabaseName("ix_price_history_scrape_result_id")
                         .HasFilter("scrape_result_id IS NOT NULL");
 
-                    b.HasIndex("SourceId")
-                        .HasDatabaseName("ix_price_history_source_id");
-
-                    b.HasIndex("ItemId", "RecordedAt")
+                    b.HasIndex("ItemId", "ObservedAt")
                         .HasDatabaseName("ix_price_history_item_id_recorded_at");
+
+                    b.HasIndex("ItemId", "SourceId")
+                        .HasDatabaseName("ix_price_history_item_id_source_id");
+
+                    b.HasIndex("SourceId", "ObservedAt")
+                        .HasDatabaseName("ix_price_history_source_id_recorded_at");
 
                     b.ToTable("price_history", null, t =>
                         {
@@ -239,22 +314,9 @@ namespace PriceWatch.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("item_id");
 
-                    b.Property<decimal?>("ManualPrice")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("manual_price");
-
-                    b.Property<decimal?>("ManualQuantity")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("numeric(18,4)")
-                        .HasColumnName("manual_quantity");
-
-                    b.Property<decimal?>("ManualUnitPrice")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
-                        .HasColumnName("manual_unit_price")
-                        .HasComputedColumnSql("CASE\n    WHEN manual_price IS NULL\n      OR manual_quantity IS NULL\n    THEN NULL\n    ELSE manual_price / manual_quantity\nEND", true);
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("observed_at");
 
                     b.Property<string>("ResultStatus")
                         .IsRequired()
@@ -297,7 +359,7 @@ namespace PriceWatch.Data.Migrations
                         .HasColumnName("scraped_unit_price")
                         .HasComputedColumnSql("CASE\n    WHEN scraped_price IS NULL\n      OR scraped_quantity IS NULL\n    THEN NULL\n    ELSE scraped_price / scraped_quantity\nEND", true);
 
-                    b.Property<long?>("SourceId")
+                    b.Property<long>("SourceId")
                         .HasColumnType("bigint")
                         .HasColumnName("source_id");
 
@@ -314,23 +376,18 @@ namespace PriceWatch.Data.Migrations
                     b.HasIndex("RunId")
                         .HasDatabaseName("ix_scrape_results_run_id");
 
-                    b.HasIndex("SourceId")
-                        .HasDatabaseName("ix_scrape_results_source_id");
-
                     b.HasIndex("ItemId", "ReviewStatus")
                         .HasDatabaseName("ix_scrape_results_item_id_review_status");
 
+                    b.HasIndex("ItemId", "SourceId")
+                        .HasDatabaseName("ix_scrape_results_item_id_source_id");
+
                     b.HasIndex("RunId", "SourceId")
                         .IsUnique()
-                        .HasDatabaseName("ix_scrape_results_run_id_source_id")
-                        .HasFilter("source_id IS NOT NULL");
+                        .HasDatabaseName("ix_scrape_results_run_id_source_id");
 
                     b.ToTable("scrape_results", null, t =>
                         {
-                            t.HasCheckConstraint("ck_scrape_results_manual_price_nonnegative", "manual_price IS NULL OR manual_price >= 0");
-
-                            t.HasCheckConstraint("ck_scrape_results_manual_quantity_positive", "manual_quantity IS NULL OR manual_quantity > 0");
-
                             t.HasCheckConstraint("ck_scrape_results_scraped_price_nonnegative", "scraped_price IS NULL OR scraped_price >= 0");
 
                             t.HasCheckConstraint("ck_scrape_results_scraped_quantity_positive", "scraped_quantity IS NULL OR scraped_quantity > 0");
@@ -423,16 +480,12 @@ namespace PriceWatch.Data.Migrations
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("current_quantity");
 
-                    b.Property<long?>("CurrentSourceId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("current_source_id");
-
                     b.Property<decimal?>("CurrentUnitPrice")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("current_unit_price")
-                        .HasComputedColumnSql("CASE\n    WHEN current_price IS NULL\n      OR current_quantity IS NULL\n    THEN NULL\n    ELSE current_price / current_quantity\nEND", true);
+                        .HasComputedColumnSql("CASE WHEN current_price IS NULL OR current_quantity IS NULL THEN NULL ELSE current_price / current_quantity END", true);
 
                     b.Property<string>("ItemType")
                         .IsRequired()
@@ -468,16 +521,12 @@ namespace PriceWatch.Data.Migrations
                         .HasColumnType("numeric(18,4)")
                         .HasColumnName("previous_quantity");
 
-                    b.Property<long?>("PreviousSourceId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("previous_source_id");
-
                     b.Property<decimal?>("PreviousUnitPrice")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)")
                         .HasColumnName("previous_unit_price")
-                        .HasComputedColumnSql("CASE\n    WHEN previous_price IS NULL\n      OR previous_quantity IS NULL\n    THEN NULL\n    ELSE previous_price / previous_quantity\nEND", true);
+                        .HasComputedColumnSql("CASE WHEN previous_price IS NULL OR previous_quantity IS NULL THEN NULL ELSE previous_price / previous_quantity END", true);
 
                     b.Property<decimal?>("TargetPrice")
                         .HasPrecision(18, 4)
@@ -510,14 +559,8 @@ namespace PriceWatch.Data.Migrations
                     b.HasIndex("ArchivedAt")
                         .HasDatabaseName("ix_tracked_items_archived_at");
 
-                    b.HasIndex("CurrentSourceId")
-                        .HasDatabaseName("ix_tracked_items_current_source_id");
-
                     b.HasIndex("ItemType")
                         .HasDatabaseName("ix_tracked_items_item_type");
-
-                    b.HasIndex("PreviousSourceId")
-                        .HasDatabaseName("ix_tracked_items_previous_source_id");
 
                     b.ToTable("tracked_items", null, t =>
                         {
@@ -535,6 +578,41 @@ namespace PriceWatch.Data.Migrations
 
                             t.HasCheckConstraint("ck_tracked_items_target_price_nonnegative", "target_price IS NULL OR target_price >= 0");
                         });
+                });
+
+            modelBuilder.Entity("PriceWatch.Data.Entities.BestPriceState", b =>
+                {
+                    b.HasOne("PriceWatch.Data.Entities.TrackedItem", "Item")
+                        .WithMany("BestPriceHistory")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_best_price_states_tracked_items_item_id");
+
+                    b.Navigation("Item");
+                });
+
+            modelBuilder.Entity("PriceWatch.Data.Entities.BestPriceStateSource", b =>
+                {
+                    b.HasOne("PriceWatch.Data.Entities.BestPriceState", "BestPriceState")
+                        .WithMany("Sources")
+                        .HasForeignKey("ItemId", "BestPriceStateId")
+                        .HasPrincipalKey("ItemId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_best_price_state_sources_best_price_states_item_id_best_pri");
+
+                    b.HasOne("PriceWatch.Data.Entities.ItemSource", "Source")
+                        .WithMany()
+                        .HasForeignKey("ItemId", "SourceId")
+                        .HasPrincipalKey("ItemId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_best_price_state_sources_item_sources_item_id_source_id");
+
+                    b.Navigation("BestPriceState");
+
+                    b.Navigation("Source");
                 });
 
             modelBuilder.Entity("PriceWatch.Data.Entities.ItemSource", b =>
@@ -558,22 +636,23 @@ namespace PriceWatch.Data.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_price_alert_events_tracked_items_item_id");
 
-                    b.HasOne("PriceWatch.Data.Entities.PriceHistory", "PriceHistory")
+                    b.HasOne("PriceWatch.Data.Entities.BestPriceState", "BestPriceState")
                         .WithMany()
-                        .HasForeignKey("PriceHistoryId")
+                        .HasForeignKey("ItemId", "BestPriceStateId")
+                        .HasPrincipalKey("ItemId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_price_alert_events_price_history_price_history_id");
+                        .HasConstraintName("fk_price_alert_events_best_price_states_item_id_best_price_sta");
+
+                    b.Navigation("BestPriceState");
 
                     b.Navigation("Item");
-
-                    b.Navigation("PriceHistory");
                 });
 
-            modelBuilder.Entity("PriceWatch.Data.Entities.PriceHistory", b =>
+            modelBuilder.Entity("PriceWatch.Data.Entities.PriceObservation", b =>
                 {
                     b.HasOne("PriceWatch.Data.Entities.TrackedItem", "Item")
-                        .WithMany("PriceHistory")
+                        .WithMany("Observations")
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
@@ -587,9 +666,11 @@ namespace PriceWatch.Data.Migrations
 
                     b.HasOne("PriceWatch.Data.Entities.ItemSource", "Source")
                         .WithMany()
-                        .HasForeignKey("SourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_price_history_item_sources_source_id");
+                        .HasForeignKey("ItemId", "SourceId")
+                        .HasPrincipalKey("ItemId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_history_item_sources_item_id_source_id");
 
                     b.Navigation("Item");
 
@@ -616,9 +697,11 @@ namespace PriceWatch.Data.Migrations
 
                     b.HasOne("PriceWatch.Data.Entities.ItemSource", "Source")
                         .WithMany()
-                        .HasForeignKey("SourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_scrape_results_item_sources_source_id");
+                        .HasForeignKey("ItemId", "SourceId")
+                        .HasPrincipalKey("ItemId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_scrape_results_item_sources_item_id_source_id");
 
                     b.Navigation("Item");
 
@@ -627,23 +710,9 @@ namespace PriceWatch.Data.Migrations
                     b.Navigation("Source");
                 });
 
-            modelBuilder.Entity("PriceWatch.Data.Entities.TrackedItem", b =>
+            modelBuilder.Entity("PriceWatch.Data.Entities.BestPriceState", b =>
                 {
-                    b.HasOne("PriceWatch.Data.Entities.ItemSource", "CurrentSource")
-                        .WithMany()
-                        .HasForeignKey("CurrentSourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_tracked_items_item_sources_current_source_id");
-
-                    b.HasOne("PriceWatch.Data.Entities.ItemSource", "PreviousSource")
-                        .WithMany()
-                        .HasForeignKey("PreviousSourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_tracked_items_item_sources_previous_source_id");
-
-                    b.Navigation("CurrentSource");
-
-                    b.Navigation("PreviousSource");
+                    b.Navigation("Sources");
                 });
 
             modelBuilder.Entity("PriceWatch.Data.Entities.ScrapeRun", b =>
@@ -653,7 +722,9 @@ namespace PriceWatch.Data.Migrations
 
             modelBuilder.Entity("PriceWatch.Data.Entities.TrackedItem", b =>
                 {
-                    b.Navigation("PriceHistory");
+                    b.Navigation("BestPriceHistory");
+
+                    b.Navigation("Observations");
 
                     b.Navigation("Sources");
                 });

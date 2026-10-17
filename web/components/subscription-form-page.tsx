@@ -32,7 +32,7 @@ type FormState = {
 
 function getSubscriptionSource(item?: ItemDetail) {
   if (!item) return undefined;
-  return item.sources.find((source) => source.manualPrice !== null) ?? item.sources[0];
+  return item.sources.find((source) => source.archivedAt === null) ?? item.sources[0];
 }
 
 function toFormState(item?: ItemDetail): FormState {
@@ -40,7 +40,7 @@ function toFormState(item?: ItemDetail): FormState {
 
   return {
     name: item?.name ?? "",
-    monthlyPrice: source?.manualPrice?.toString() ?? "",
+    monthlyPrice: item?.currentUnitPrice?.toString() ?? "",
     currency: item?.currency ?? "SEK",
   };
 }
@@ -117,27 +117,35 @@ export function SubscriptionFormPage({
 
       if (!itemId) throw new Error("Item ID is missing.");
 
-      // Current data model stores the subscription price in one hidden non-scraping source.
+      // Subscriptions use one non-scraping source; price changes append manual observations.
       const sourcePayload = {
         store: form.name.trim(),
         url: null,
         scrapingEnabled: false,
         defaultQuantity: 1,
-        manualPrice: monthlyPrice,
         note: null,
       };
 
       const source = getSubscriptionSource(initialItem);
+      let sourceId = source?.id;
 
-      if (source) {
-        await apiFetch<void>(`/api/items/${itemId}/sources/${source.id}`, token.accessToken, {
+      if (sourceId) {
+        await apiFetch<void>(`/api/items/${itemId}/sources/${sourceId}`, token.accessToken, {
           method: "PUT",
           body: JSON.stringify(sourcePayload),
         });
       } else {
-        await apiFetch<{ id: number }>(`/api/items/${itemId}/sources`, token.accessToken, {
+        const created = await apiFetch<{ id: number }>(`/api/items/${itemId}/sources`, token.accessToken, {
           method: "POST",
           body: JSON.stringify(sourcePayload),
+        });
+        sourceId = created.id;
+      }
+
+      if (sourceId && monthlyPrice !== initialItem?.currentUnitPrice) {
+        await apiFetch<void>(`/api/items/${itemId}/sources/${sourceId}/manual-price`, token.accessToken, {
+          method: "POST",
+          body: JSON.stringify({ price: monthlyPrice, quantity: 1 }),
         });
       }
 

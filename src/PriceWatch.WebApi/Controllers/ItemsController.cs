@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PriceWatch.Core.Services;
 using PriceWatch.Data;
 using PriceWatch.Data.Entities;
 using PriceWatch.WebApi.DTOs;
@@ -13,14 +14,16 @@ namespace PriceWatch.WebApi.Controllers;
 public class ItemsController : ControllerBase
 {
     private readonly PriceWatchDbContext _db;
+    private readonly PriceTrackingService _prices;
 
-    public ItemsController(PriceWatchDbContext db)
+    public ItemsController(
+        PriceWatchDbContext db,
+        PriceTrackingService prices)
     {
         _db = db;
+        _prices = prices;
     }
 
-    // GET /api/items
-    // Archived items are hidden unless includeArchived=true.
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] bool includeArchived = false,
@@ -28,58 +31,69 @@ public class ItemsController : ControllerBase
     {
         var query = _db.TrackedItems
             .AsNoTracking()
+            .Include(x => x.Sources)
             .AsQueryable();
 
         if (!includeArchived)
-        {
             query = query.Where(x => x.ArchivedAt == null);
-        }
 
         var items = await query
             .OrderBy(x => x.Name)
-            .Select(x => new
-            {
-                x.Id,
-                x.ItemType,
-                x.Name,
-                x.Currency,
-                x.Unit,
-
-                x.TargetUnitPrice,
-                x.CurrentUnitPrice,
-                x.PreviousUnitPrice,
-
-                CurrentStore = x.CurrentSource != null
-                    ? x.CurrentSource.Store
-                    : null,
-
-                SourceCount = x.Sources.Count,
-                HasScrapingSources = x.Sources.Any(s => s.ScrapingEnabled),
-
-                x.CheckIntervalMinutes,
-                x.TrackingEnabled,
-
-                x.LastCheckedAt,
-                x.LastSuccessfulPriceAt,
-                x.LastPriceChangedAt,
-
-                x.ArchivedAt,
-
-                MonthlyPrice = x.ItemType == ItemType.Subscription
-                ? x.Sources
-                    .Where(s =>
-                        !s.ScrapingEnabled &&
-                        s.ManualPrice != null)
-                    .Select(s => s.ManualPrice)
-                    .FirstOrDefault()
-                : null,
-            })
             .ToListAsync(ct);
 
-        return Ok(items);
+        var itemIds = items.Select(x => x.Id).ToArray();
+        var states = await _db.BestPriceStates
+            .AsNoTracking()
+            .Include(x => x.Sources)
+                .ThenInclude(x => x.Source)
+            .Where(x => itemIds.Contains(x.ItemId))
+            .OrderByDescending(x => x.RecordedAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
+
+        var latestStateByItem = states
+            .GroupBy(x => x.ItemId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var response = items.Select(item =>
+        {
+            latestStateByItem.TryGetValue(item.Id, out var state);
+            var activeSources = item.Sources.Where(x => x.ArchivedAt == null).ToList();
+
+            return new
+            {
+                item.Id,
+                item.ItemType,
+                item.Name,
+                item.Currency,
+                item.Unit,
+                item.TargetUnitPrice,
+                item.CurrentUnitPrice,
+                item.PreviousUnitPrice,
+                CurrentStores = item.CurrentUnitPrice.HasValue
+                    ? state?.Sources
+                        .Where(x => x.Source.ArchivedAt == null)
+                        .Select(x => x.Source.Store)
+                        .OrderBy(x => x)
+                        .ToArray() ?? []
+                    : [],
+                SourceCount = activeSources.Count,
+                HasScrapingSources = activeSources.Any(x => x.ScrapingEnabled),
+                item.CheckIntervalMinutes,
+                item.TrackingEnabled,
+                item.LastCheckedAt,
+                item.LastSuccessfulPriceAt,
+                item.LastPriceChangedAt,
+                item.ArchivedAt,
+                MonthlyPrice = item.ItemType == ItemType.Subscription
+                    ? item.CurrentUnitPrice
+                    : null
+            };
+        });
+
+        return Ok(response);
     }
 
-    // GET /api/items/{id}
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(
         Guid id,
@@ -87,141 +101,136 @@ public class ItemsController : ControllerBase
     {
         var item = await _db.TrackedItems
             .AsNoTracking()
-            .Where(x => x.Id == id)
-            .Select(x => new
-            {
-                x.Id,
-                x.ItemType,
-                x.Name,
-                x.Currency,
-                x.Unit,
+            .Include(x => x.Sources)
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
 
-                x.TargetPrice,
-                x.ComparisonQuantity,
-                x.TargetUnitPrice,
+        if (item is null)
+            return NotFound();
 
-                x.CurrentPrice,
-                x.CurrentQuantity,
-                x.CurrentUnitPrice,
-                x.CurrentSourceId,
+        var state = await _db.BestPriceStates
+            .AsNoTracking()
+            .Include(x => x.Sources)
+                .ThenInclude(x => x.Source)
+            .Where(x => x.ItemId == id)
+            .OrderByDescending(x => x.RecordedAt)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(ct);
 
-                CurrentStore = x.CurrentSource != null
-                    ? x.CurrentSource.Store
-                    : null,
-
-                x.PreviousPrice,
-                x.PreviousQuantity,
-                x.PreviousUnitPrice,
-                x.PreviousSourceId,
-
-                PreviousStore = x.PreviousSource != null
-                    ? x.PreviousSource.Store
-                    : null,
-
-                x.CheckIntervalMinutes,
-                x.TrackingEnabled,
-
-                x.LastCheckedAt,
-                x.LastSuccessfulPriceAt,
-                x.LastPriceChangedAt,
-
-                x.ArchivedAt,
-                x.CreatedAt,
-                x.UpdatedAt,
-
-                Sources = x.Sources
-                    .OrderBy(s => s.Store)
-                    .Select(s => new
-                    {
-                        s.Id,
-                        s.Store,
-                        s.Url,
-                        s.ScrapingEnabled,
-                        s.DefaultQuantity,
-                        s.ManualPrice,
-                        s.Note,
-                        s.CreatedAt,
-                        s.UpdatedAt
-                    })
-                    .ToList()
-            })
-            .SingleOrDefaultAsync(ct);
-
-        return item is null
-            ? NotFound()
-            : Ok(item);
+        return Ok(new
+        {
+            item.Id,
+            item.ItemType,
+            item.Name,
+            item.Currency,
+            item.Unit,
+            item.TargetPrice,
+            item.ComparisonQuantity,
+            item.TargetUnitPrice,
+            item.CurrentPrice,
+            item.CurrentQuantity,
+            item.CurrentUnitPrice,
+            CurrentStores = item.CurrentUnitPrice.HasValue
+                ? state?.Sources
+                    .Where(x => x.Source.ArchivedAt == null)
+                    .Select(x => x.Source.Store)
+                    .OrderBy(x => x)
+                    .ToArray() ?? []
+                : [],
+            item.PreviousPrice,
+            item.PreviousQuantity,
+            item.PreviousUnitPrice,
+            item.CheckIntervalMinutes,
+            item.TrackingEnabled,
+            item.LastCheckedAt,
+            item.LastSuccessfulPriceAt,
+            item.LastPriceChangedAt,
+            item.ArchivedAt,
+            item.CreatedAt,
+            item.UpdatedAt,
+            Sources = item.Sources
+                .OrderBy(x => x.ArchivedAt.HasValue)
+                .ThenBy(x => x.Store)
+                .Select(source => new
+                {
+                    source.Id,
+                    source.Store,
+                    source.Url,
+                    source.ScrapingEnabled,
+                    source.DefaultQuantity,
+                    source.Note,
+                    source.ArchivedAt,
+                    source.CreatedAt,
+                    source.UpdatedAt
+                })
+                .ToList()
+        });
     }
 
-    // GET /api/items/{id}/history
     [HttpGet("{id:guid}/history")]
     public async Task<IActionResult> History(
         Guid id,
         [FromQuery] DateTimeOffset? from,
         CancellationToken ct = default)
     {
-        var itemExists = await _db.TrackedItems
-            .AsNoTracking()
-            .AnyAsync(x => x.Id == id, ct);
-
-        if (!itemExists)
-        {
+        if (!await _db.TrackedItems.AsNoTracking().AnyAsync(x => x.Id == id, ct))
             return NotFound();
-        }
 
-        var query = _db.PriceHistory
+        var query = _db.BestPriceStates
             .AsNoTracking()
+            .Include(x => x.Sources)
+                .ThenInclude(x => x.Source)
             .Where(x => x.ItemId == id);
 
         if (from.HasValue)
-        {
             query = query.Where(x => x.RecordedAt >= from.Value);
-        }
 
-        var history = await query
+        var states = await query
             .OrderBy(x => x.RecordedAt)
-            .Select(x => new
-            {
-                x.RecordedAt,
-                x.UnitPrice
-            })
+            .ThenBy(x => x.Id)
             .ToListAsync(ct);
 
-        return Ok(history);
+        return Ok(states.Select(state => new
+        {
+            state.RecordedAt,
+            state.UnitPrice,
+            Stores = state.Sources
+                .Select(x => x.Source.Store)
+                .OrderBy(x => x)
+                .ToArray()
+        }));
     }
 
-    // POST /api/items
+    [HttpGet("{id:guid}/offers")]
+    public async Task<IActionResult> GetOffers(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        if (!await _db.TrackedItems.AsNoTracking().AnyAsync(x => x.Id == id, ct))
+            return NotFound();
+
+        return Ok(await _prices.GetEffectiveOffersAsync(id, false, ct));
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateItemRequest request,
         CancellationToken ct = default)
     {
-        var validationError = ValidateItem(
-            request.Name,
-            request.Currency,
-            request.TargetPrice,
-            request.ComparisonQuantity,
-            request.CheckIntervalMinutes);
-
+        var validationError = ValidateItem(request);
         if (validationError is not null)
-        {
             return BadRequest(new { error = validationError });
-        }
 
         var now = DateTimeOffset.UtcNow;
-
         var item = new TrackedItem
         {
             ItemType = request.ItemType,
             Name = request.Name.Trim(),
             Currency = request.Currency.Trim().ToUpperInvariant(),
             Unit = NormalizeOptional(request.Unit),
-
             TargetPrice = request.TargetPrice,
             ComparisonQuantity = request.ComparisonQuantity,
-
             CheckIntervalMinutes = request.CheckIntervalMinutes,
             TrackingEnabled = request.TrackingEnabled,
-
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -229,212 +238,111 @@ public class ItemsController : ControllerBase
         _db.TrackedItems.Add(item);
         await _db.SaveChangesAsync(ct);
 
-        return CreatedAtAction(
-            nameof(GetById),
-            new { id = item.Id },
-            new { item.Id });
+        return CreatedAtAction(nameof(GetById), new { id = item.Id }, new { item.Id });
     }
 
-    // PUT /api/items/{id}
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] UpdateItemRequest request,
         CancellationToken ct = default)
     {
-        var validationError = ValidateItem(
-            request.Name,
-            request.Currency,
-            request.TargetPrice,
-            request.ComparisonQuantity,
-            request.CheckIntervalMinutes);
-
+        var validationError = ValidateItem(request);
         if (validationError is not null)
-        {
             return BadRequest(new { error = validationError });
-        }
 
-        var item = await _db.TrackedItems
-            .SingleOrDefaultAsync(x => x.Id == id, ct);
-
+        var item = await _db.TrackedItems.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (item is null)
-        {
             return NotFound();
-        }
 
         item.ItemType = request.ItemType;
         item.Name = request.Name.Trim();
         item.Currency = request.Currency.Trim().ToUpperInvariant();
         item.Unit = NormalizeOptional(request.Unit);
-
         item.TargetPrice = request.TargetPrice;
         item.ComparisonQuantity = request.ComparisonQuantity;
-
         item.CheckIntervalMinutes = request.CheckIntervalMinutes;
         item.TrackingEnabled = request.TrackingEnabled;
-
         item.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync(ct);
-
         return NoContent();
     }
 
-    // POST /api/items/{id}/archive
-    //
-    // Archive is NOT delete.
-    // It means "keep this item and its history, but stop following it for now".
     [HttpPost("{id:guid}/archive")]
-    public async Task<IActionResult> Archive(
-        Guid id,
-        CancellationToken ct = default)
+    public async Task<IActionResult> Archive(Guid id, CancellationToken ct = default)
     {
-        var item = await _db.TrackedItems
-            .SingleOrDefaultAsync(x => x.Id == id, ct);
-
+        var item = await _db.TrackedItems.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (item is null)
-        {
             return NotFound();
-        }
 
-        if (item.ArchivedAt is null)
-        {
-            var now = DateTimeOffset.UtcNow;
-
-            item.ArchivedAt = now;
-            item.TrackingEnabled = false;
-            item.UpdatedAt = now;
-
-            await _db.SaveChangesAsync(ct);
-        }
-
+        item.ArchivedAt = DateTimeOffset.UtcNow;
+        item.TrackingEnabled = false;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
         return NoContent();
     }
 
-    // POST /api/items/{id}/restore
-    //
-    // Restoring does not automatically enable tracking.
     [HttpPost("{id:guid}/restore")]
-    public async Task<IActionResult> Restore(
-        Guid id,
-        CancellationToken ct = default)
+    public async Task<IActionResult> Restore(Guid id, CancellationToken ct = default)
     {
-        var item = await _db.TrackedItems
-            .SingleOrDefaultAsync(x => x.Id == id, ct);
-
+        var item = await _db.TrackedItems.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (item is null)
-        {
             return NotFound();
-        }
 
         item.ArchivedAt = null;
         item.UpdatedAt = DateTimeOffset.UtcNow;
-
         await _db.SaveChangesAsync(ct);
-
         return NoContent();
     }
 
-    // DELETE /api/items/{id}
-    //
-    // Permanent deletion.
-    //
-    // Deletes:
-    // - PriceAlertEvents for the item
-    // - PriceHistory for the item
-    // - ScrapeResults for the item
-    // - ItemSources for the item
-    // - TrackedItem itself
-    //
-    // ScrapeRun is deliberately kept because one run may contain
-    // results from many different items.
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(
-        Guid id,
-        CancellationToken ct = default)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct = default)
     {
-        await using var transaction =
-            await _db.Database.BeginTransactionAsync(ct);
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
-        var item = await _db.TrackedItems
-            .SingleOrDefaultAsync(x => x.Id == id, ct);
-
+        var item = await _db.TrackedItems.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (item is null)
-        {
             return NotFound();
-        }
 
-        // TrackedItem itself may reference ItemSource through these FKs.
-        // Clear them before deleting sources.
-        item.CurrentSourceId = null;
-        item.PreviousSourceId = null;
-
-        await _db.SaveChangesAsync(ct);
-
-        // Alerts reference item/history, so delete them before history.
-        await _db.PriceAlertEvents
+        var stateIds = await _db.BestPriceStates
             .Where(x => x.ItemId == id)
-            .ExecuteDeleteAsync(ct);
+            .Select(x => x.Id)
+            .ToListAsync(ct);
 
-        // PriceHistory may reference ScrapeResult, so delete history
-        // before deleting ScrapeResults.
-        await _db.PriceHistory
-            .Where(x => x.ItemId == id)
+        await _db.PriceAlertEvents.Where(x => x.ItemId == id).ExecuteDeleteAsync(ct);
+        await _db.BestPriceStateSources
+            .Where(x => stateIds.Contains(x.BestPriceStateId))
             .ExecuteDeleteAsync(ct);
-
-        await _db.ScrapeResults
-            .Where(x => x.ItemId == id)
-            .ExecuteDeleteAsync(ct);
-
-        await _db.ItemSources
-            .Where(x => x.ItemId == id)
-            .ExecuteDeleteAsync(ct);
+        await _db.BestPriceStates.Where(x => x.ItemId == id).ExecuteDeleteAsync(ct);
+        await _db.PriceObservations.Where(x => x.ItemId == id).ExecuteDeleteAsync(ct);
+        await _db.ScrapeResults.Where(x => x.ItemId == id).ExecuteDeleteAsync(ct);
+        await _db.ItemSources.Where(x => x.ItemId == id).ExecuteDeleteAsync(ct);
 
         _db.TrackedItems.Remove(item);
-
         await _db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-
         return NoContent();
     }
 
-    // POST /api/items/{itemId}/sources
     [HttpPost("{itemId:guid}/sources")]
     public async Task<IActionResult> CreateSource(
         Guid itemId,
         [FromBody] CreateSourceRequest request,
         CancellationToken ct = default)
     {
-        var validationError = ValidateSource(
-            request.Store,
-            request.Url,
-            request.ScrapingEnabled,
-            request.DefaultQuantity,
-            request.ManualPrice);
-
+        var validationError = ValidateSource(request);
         if (validationError is not null)
-        {
             return BadRequest(new { error = validationError });
-        }
 
-        var item = await _db.TrackedItems
-            .SingleOrDefaultAsync(x => x.Id == itemId, ct);
-
+        var item = await _db.TrackedItems.SingleOrDefaultAsync(x => x.Id == itemId, ct);
         if (item is null)
-        {
             return NotFound(new { error = "Item not found." });
-        }
 
         if (item.ArchivedAt is not null)
-        {
-            return Conflict(new
-            {
-                error = "Cannot add a source to an archived item."
-            });
-        }
+            return Conflict(new { error = "Cannot add a source to an archived item." });
 
         var now = DateTimeOffset.UtcNow;
-
         var source = new ItemSource
         {
             ItemId = itemId,
@@ -442,24 +350,18 @@ public class ItemsController : ControllerBase
             Url = NormalizeOptional(request.Url),
             ScrapingEnabled = request.ScrapingEnabled,
             DefaultQuantity = request.DefaultQuantity,
-            ManualPrice = request.ManualPrice,
             Note = NormalizeOptional(request.Note),
             CreatedAt = now,
             UpdatedAt = now
         };
 
         _db.ItemSources.Add(source);
-
         item.UpdatedAt = now;
-
         await _db.SaveChangesAsync(ct);
 
-        return Created(
-            $"/api/items/{itemId}",
-            new { source.Id });
+        return Created($"/api/items/{itemId}", new { source.Id });
     }
 
-    // PUT /api/items/{itemId}/sources/{sourceId}
     [HttpPut("{itemId:guid}/sources/{sourceId:long}")]
     public async Task<IActionResult> UpdateSource(
         Guid itemId,
@@ -467,314 +369,183 @@ public class ItemsController : ControllerBase
         [FromBody] UpdateSourceRequest request,
         CancellationToken ct = default)
     {
-        var validationError = ValidateSource(
-            request.Store,
-            request.Url,
-            request.ScrapingEnabled,
-            request.DefaultQuantity,
-            request.ManualPrice);
-
+        var validationError = ValidateSource(request);
         if (validationError is not null)
-        {
             return BadRequest(new { error = validationError });
-        }
 
         var source = await _db.ItemSources
-            .SingleOrDefaultAsync(
-                x => x.Id == sourceId && x.ItemId == itemId,
-                ct);
-
+            .SingleOrDefaultAsync(x => x.Id == sourceId && x.ItemId == itemId, ct);
         if (source is null)
-        {
             return NotFound();
-        }
 
         source.Store = request.Store.Trim();
         source.Url = NormalizeOptional(request.Url);
         source.ScrapingEnabled = request.ScrapingEnabled;
         source.DefaultQuantity = request.DefaultQuantity;
-        source.ManualPrice = request.ManualPrice;
         source.Note = NormalizeOptional(request.Note);
         source.UpdatedAt = DateTimeOffset.UtcNow;
 
-        var item = await _db.TrackedItems
-            .SingleAsync(x => x.Id == itemId, ct);
-
+        var item = await _db.TrackedItems.SingleAsync(x => x.Id == itemId, ct);
         item.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    [HttpPost("{itemId:guid}/sources/{sourceId:long}/archive")]
+    public async Task<IActionResult> ArchiveSource(
+        Guid itemId,
+        long sourceId,
+        CancellationToken ct = default)
+    {
+        var source = await _db.ItemSources
+            .SingleOrDefaultAsync(x => x.Id == sourceId && x.ItemId == itemId, ct);
+        if (source is null)
+            return NotFound();
+
+        if (source.ArchivedAt is null)
+        {
+            source.ArchivedAt = DateTimeOffset.UtcNow;
+            source.UpdatedAt = source.ArchivedAt.Value;
+            await _db.SaveChangesAsync(ct);
+            await _prices.RecalculateBestPriceAsync(
+                itemId,
+                BestPriceChangeCause.SourceChange,
+                source.ArchivedAt.Value,
+                ct);
+            await _db.SaveChangesAsync(ct);
+        }
 
         return NoContent();
     }
 
-    // GET /api/items/{id}/offers
-[HttpGet("{id:guid}/offers")]
-public async Task<IActionResult> GetOffers(
-    Guid id,
-    CancellationToken ct = default)
-{
-    var item = await _db.TrackedItems
-        .AsNoTracking()
-        .Where(x => x.Id == id)
-        .Select(x => new
-        {
-            x.Id,
-            x.CurrentSourceId
-        })
-        .SingleOrDefaultAsync(ct);
-
-    if (item is null)
+    [HttpPost("{itemId:guid}/sources/{sourceId:long}/restore")]
+    public async Task<IActionResult> RestoreSource(
+        Guid itemId,
+        long sourceId,
+        CancellationToken ct = default)
     {
-        return NotFound();
+        var source = await _db.ItemSources
+            .SingleOrDefaultAsync(x => x.Id == sourceId && x.ItemId == itemId, ct);
+        if (source is null)
+            return NotFound();
+
+        if (source.ArchivedAt is not null)
+        {
+            var now = DateTimeOffset.UtcNow;
+            source.ArchivedAt = null;
+            source.UpdatedAt = now;
+            await _db.SaveChangesAsync(ct);
+            await _prices.RecalculateBestPriceAsync(
+                itemId,
+                BestPriceChangeCause.SourceChange,
+                now,
+                ct);
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return NoContent();
     }
 
-    var sources = await _db.ItemSources
-        .AsNoTracking()
-        .Where(x => x.ItemId == id)
-        .OrderBy(x => x.Store)
-        .ToListAsync(ct);
+    [HttpPost("{itemId:guid}/sources/{sourceId:long}/manual-price")]
+    public async Task<IActionResult> AddManualPrice(
+        Guid itemId,
+        long sourceId,
+        [FromBody] ManualObservationRequest request,
+        CancellationToken ct = default)
+    {
+        if (request.Price < 0)
+            return BadRequest(new { error = "Price cannot be negative." });
+        if (request.Quantity <= 0)
+            return BadRequest(new { error = "Quantity must be greater than zero." });
 
-    var sourceIds = sources
-        .Select(x => x.Id)
-        .ToArray();
-
-    var acceptedResults =
-        await _db.ScrapeResults
+        var source = await _db.ItemSources
             .AsNoTracking()
-            .Where(x =>
-                x.ItemId == id &&
-                x.SourceId.HasValue &&
-                sourceIds.Contains(
-                    x.SourceId.Value) &&
-                (
-                    x.ReviewStatus ==
-                        ReviewStatus.NotRequired ||
-                    x.ReviewStatus ==
-                        ReviewStatus.Accepted ||
-                    x.ReviewStatus ==
-                        ReviewStatus.ManualOverride
-                ))
-            .OrderByDescending(
-                x => x.CreatedAt)
-            .Select(x => new
-            {
-                x.SourceId,
-                x.ScrapedPrice,
-                x.ScrapedQuantity,
-                x.ManualPrice,
-                x.ManualQuantity,
-                x.ReviewStatus,
-                x.CreatedAt,
-                x.ReviewedAt
-            })
-            .ToListAsync(ct);
+            .SingleOrDefaultAsync(x =>
+                x.Id == sourceId &&
+                x.ItemId == itemId &&
+                x.ArchivedAt == null,
+                ct);
 
-    var latestBySource =
-        acceptedResults
-            .Where(x =>
-                x.SourceId.HasValue)
-            .GroupBy(x =>
-                x.SourceId!.Value)
-            .ToDictionary(
-                group => group.Key,
-                group => group.First());
+        if (source is null)
+            return NotFound();
 
-    var offers = sources.Select(source =>
-    {
-        decimal? price = null;
-        decimal? quantity = null;
-        decimal? unitPrice = null;
-        DateTimeOffset? observedAt = null;
+        var hasPendingReview = await _db.ScrapeResults
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.SourceId == sourceId &&
+                x.ReviewStatus == ReviewStatus.Pending,
+                ct);
 
-        // Scraping disabled: use the stored price
-        if (
-            !source.ScrapingEnabled &&
-            source.ManualPrice.HasValue)
+        if (hasPendingReview)
         {
-            price =
-                source.ManualPrice.Value;
-
-            quantity =
-                source.DefaultQuantity;
-
-            if (quantity > 0)
+            return Conflict(new
             {
-                unitPrice =
-                    price / quantity;
-            }
-
-            observedAt =
-                source.UpdatedAt;
-        }
-        // Scraped source
-        else if (
-            latestBySource.TryGetValue(
-                source.Id,
-                out var result))
-        {
-            if (
-                result.ReviewStatus ==
-                    ReviewStatus.ManualOverride &&
-                result.ManualPrice.HasValue &&
-                result.ManualQuantity.HasValue &&
-                result.ManualQuantity.Value > 0)
-            {
-                price =
-                    result.ManualPrice.Value;
-
-                quantity =
-                    result.ManualQuantity.Value;
-
-                unitPrice =
-                    price / quantity;
-
-                observedAt =
-                    result.ReviewedAt ??
-                    result.CreatedAt;
-            }
-            else if (
-                result.ScrapedPrice.HasValue &&
-                result.ScrapedQuantity.HasValue &&
-                result.ScrapedQuantity.Value > 0)
-            {
-                price =
-                    result.ScrapedPrice.Value;
-
-                quantity =
-                    result.ScrapedQuantity.Value;
-
-                unitPrice =
-                    price / quantity;
-
-                observedAt =
-                    result.ReviewedAt ??
-                    result.CreatedAt;
-            }
+                error = "This source has a pending review. Resolve it from Reviews before entering a manual price here.",
+                reason = "pending_review"
+            });
         }
 
-        return new
-        {
-            SourceId = source.Id,
-            source.Store,
-            source.Url,
-            source.Note,
-            source.ScrapingEnabled,
-            Price = price,
-            Quantity = quantity,
-            UnitPrice = unitPrice,
-            ObservedAt = observedAt,
-            IsCurrent =
-                item.CurrentSourceId ==
-                source.Id
-        };
-    });
+        var now = DateTimeOffset.UtcNow;
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
-    return Ok(offers);
-}
+        _prices.AddObservation(
+            itemId,
+            sourceId,
+            request.Price,
+            request.Quantity,
+            PriceOrigin.Manual,
+            now);
 
-    private static string? ValidateItem(
-        string name,
-        string currency,
-        decimal? targetPrice,
-        decimal comparisonQuantity,
-        int? checkIntervalMinutes)
+        await _db.SaveChangesAsync(ct);
+        await _prices.RecalculateBestPriceAsync(
+            itemId,
+            BestPriceChangeCause.Manual,
+            now,
+            ct);
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+
+        return NoContent();
+    }
+
+    private static string? ValidateItem(CreateItemRequest request)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
+        if (string.IsNullOrWhiteSpace(request.Name))
             return "Name is required.";
-        }
-
-        if (name.Trim().Length > 200)
-        {
+        if (request.Name.Trim().Length > 500)
             return "Name is too long.";
-        }
-
-        if (string.IsNullOrWhiteSpace(currency))
-        {
-            return "Currency is required.";
-        }
-
-        if (currency.Trim().Length != 3)
-        {
+        if (string.IsNullOrWhiteSpace(request.Currency) || request.Currency.Trim().Length != 3)
             return "Currency must be a 3-letter code, for example SEK.";
-        }
-
-        if (comparisonQuantity <= 0)
-        {
+        if (request.ComparisonQuantity <= 0)
             return "ComparisonQuantity must be greater than zero.";
-        }
-
-        if (targetPrice is < 0)
-        {
+        if (request.TargetPrice is < 0)
             return "TargetPrice cannot be negative.";
-        }
-
-        if (checkIntervalMinutes is <= 0)
-        {
+        if (request.CheckIntervalMinutes is <= 0)
             return "CheckIntervalMinutes must be greater than zero.";
-        }
-
         return null;
     }
 
-    private static string? ValidateSource(
-        string store,
-        string? url,
-        bool scrapingEnabled,
-        decimal defaultQuantity,
-        decimal? manualPrice)
+    private static string? ValidateSource(CreateSourceRequest request)
     {
-        if (string.IsNullOrWhiteSpace(store))
-        {
+        if (string.IsNullOrWhiteSpace(request.Store))
             return "Store is required.";
-        }
-
-        if (defaultQuantity <= 0)
-        {
+        if (request.DefaultQuantity <= 0)
             return "DefaultQuantity must be greater than zero.";
-        }
-
-        if (manualPrice is < 0)
-        {
-            return "Price cannot be negative.";
-        }
-
-        if (scrapingEnabled && string.IsNullOrWhiteSpace(url))
-        {
+        if (request.ScrapingEnabled && string.IsNullOrWhiteSpace(request.Url))
             return "Url is required when scraping is enabled.";
-        }
 
-        if (scrapingEnabled && manualPrice.HasValue)
+        if (!string.IsNullOrWhiteSpace(request.Url))
         {
-            return "Price must be empty when scraping is enabled.";
-        }
-
-        if (!scrapingEnabled && !manualPrice.HasValue)
-        {
-            return "Price is required when scraping is disabled.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(url))
-        {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            {
+            if (!Uri.TryCreate(request.Url, UriKind.Absolute, out var uri))
                 return "Url must be a valid absolute URL.";
-            }
-
-            if (uri.Scheme != Uri.UriSchemeHttp &&
-                uri.Scheme != Uri.UriSchemeHttps)
-            {
+            if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
                 return "Url must use http or https.";
-            }
         }
 
         return null;
     }
 
-    private static string? NormalizeOptional(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
-    }
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

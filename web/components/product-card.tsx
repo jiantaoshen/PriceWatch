@@ -75,10 +75,10 @@ export function ProductCard({
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                {item.currentStore && (
+                {item.currentStores.length > 0 && (
                   <span>
                     {archived ? "Last best at" : "Best at"}{" "}
-                    <span className="font-medium text-foreground">{item.currentStore}</span>
+                    <span className="font-medium text-foreground">{item.currentStores.join(", ")}</span>
                   </span>
                 )}
                 {!archived && targetDifference && (

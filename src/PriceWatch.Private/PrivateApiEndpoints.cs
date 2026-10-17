@@ -106,6 +106,7 @@ public static class PrivateApiEndpoints
             .CountAsync(x =>
                 x.Item.ArchivedAt == null &&
                 x.Item.TrackingEnabled &&
+                x.ArchivedAt == null &&
                 x.ScrapingEnabled,
                 ct);
 
@@ -148,39 +149,61 @@ public static class PrivateApiEndpoints
     {
         var query = db.TrackedItems
             .AsNoTracking()
+            .Include(x => x.Sources)
             .AsQueryable();
 
         if (!includeArchived)
-        {
             query = query.Where(x => x.ArchivedAt == null);
-        }
 
         var items = await query
             .OrderBy(x => x.Name)
-            .Select(x => new
-            {
-                x.Id,
-                x.ItemType,
-                x.Name,
-                x.Currency,
-                x.Unit,
-                x.TargetUnitPrice,
-                x.CurrentUnitPrice,
-                x.PreviousUnitPrice,
-                CurrentStore = x.CurrentSource != null
-                    ? x.CurrentSource.Store
-                    : null,
-                SourceCount = x.Sources.Count,
-                HasScrapingSources = x.Sources.Any(s => s.ScrapingEnabled),
-                x.CheckIntervalMinutes,
-                x.TrackingEnabled,
-                x.LastCheckedAt,
-                x.LastPriceChangedAt,
-                x.ArchivedAt
-            })
             .ToListAsync(ct);
 
-        return Results.Ok(items);
+        var itemIds = items.Select(x => x.Id).ToArray();
+        var states = await db.BestPriceStates
+            .AsNoTracking()
+            .Include(x => x.Sources)
+                .ThenInclude(x => x.Source)
+            .Where(x => itemIds.Contains(x.ItemId))
+            .OrderByDescending(x => x.RecordedAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
+
+        var latestStateByItem = states
+            .GroupBy(x => x.ItemId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return Results.Ok(items.Select(item =>
+        {
+            latestStateByItem.TryGetValue(item.Id, out var state);
+            var activeSources = item.Sources.Where(x => x.ArchivedAt == null).ToList();
+
+            return new
+            {
+                item.Id,
+                item.ItemType,
+                item.Name,
+                item.Currency,
+                item.Unit,
+                item.TargetUnitPrice,
+                item.CurrentUnitPrice,
+                item.PreviousUnitPrice,
+                CurrentStores = item.CurrentUnitPrice.HasValue
+                    ? state?.Sources
+                        .Where(x => x.Source.ArchivedAt == null)
+                        .Select(x => x.Source.Store)
+                        .OrderBy(x => x)
+                        .ToArray() ?? []
+                    : [],
+                SourceCount = activeSources.Count,
+                HasScrapingSources = activeSources.Any(x => x.ScrapingEnabled),
+                item.CheckIntervalMinutes,
+                item.TrackingEnabled,
+                item.LastCheckedAt,
+                item.LastPriceChangedAt,
+                item.ArchivedAt
+            };
+        }));
     }
 
     private static async Task<IResult> RunsAsync(
@@ -235,7 +258,7 @@ public static class PrivateApiEndpoints
                 x.ItemId,
                 ItemName = x.Item.Name,
                 x.SourceId,
-                Store = x.Source != null ? x.Source.Store : null,
+                Store = x.Source.Store,
                 x.ResultStatus,
                 x.ReviewStatus,
                 x.ScrapedPrice,
@@ -243,6 +266,7 @@ public static class PrivateApiEndpoints
                 x.ScrapedUnitPrice,
                 x.SuspiciousReason,
                 x.Error,
+                x.ObservedAt,
                 x.CreatedAt,
                 x.ReviewedAt
             })
