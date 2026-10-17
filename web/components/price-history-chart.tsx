@@ -27,38 +27,22 @@ export function PriceHistoryChart({
   if (history.length === 0) {
     return (
       <div className="flex h-[320px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-        No accepted price history yet.
+        No lowest-price history yet.
       </div>
     );
   }
 
   const data = history.map((point) => ({
-    timestamp: new Date(
-      point.recordedAt
-    ).getTime(),
+    timestamp: new Date(point.recordedAt).getTime(),
     unitPrice: point.unitPrice,
+    stores: point.stores,
   }));
 
   return (
     <div className="h-[340px] w-full">
-      <ResponsiveContainer
-        width="100%"
-        height="100%"
-      >
-        <LineChart
-          data={data}
-          margin={{
-            top: 16,
-            right: 12,
-            bottom: 4,
-            left: 0,
-          }}
-        >
-          <CartesianGrid
-            vertical={false}
-            strokeDasharray="3 3"
-            opacity={0.3}
-          />
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 16, right: 12, bottom: 4, left: 0 }}>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
 
           <XAxis
             dataKey="timestamp"
@@ -66,13 +50,7 @@ export function PriceHistoryChart({
             scale="time"
             domain={["dataMin", "dataMax"]}
             tickFormatter={(value) =>
-              new Intl.DateTimeFormat(
-                "en-GB",
-                {
-                  month: "short",
-                  day: "numeric",
-                }
-              ).format(new Date(value))
+              new Intl.DateTimeFormat("en-GB", { month: "short", day: "numeric" }).format(new Date(value))
             }
             tickLine={false}
             axisLine={false}
@@ -82,12 +60,7 @@ export function PriceHistoryChart({
           <YAxis
             width={72}
             tickFormatter={(value) =>
-              new Intl.NumberFormat(
-                "sv-SE",
-                {
-                  maximumFractionDigits: 2,
-                }
-              ).format(value)
+              new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 2 }).format(value)
             }
             tickLine={false}
             axisLine={false}
@@ -95,30 +68,34 @@ export function PriceHistoryChart({
           />
 
           <Tooltip
-            labelFormatter={(value) =>
-              new Intl.DateTimeFormat(
-                "en-GB",
-                {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }
-              ).format(
-                new Date(
-                  Number(value)
-                )
-              )
-            }
-            formatter={(value) => [
-              formatUnitPrice(
-                Number(value),
-                currency,
-                unit
-              ),
-              "Unit price",
-            ]}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+
+              const point = payload[0].payload as {
+                unitPrice: number;
+                stores: string[];
+              };
+
+              return (
+                <div className="rounded-lg border bg-background p-3 text-sm shadow-sm">
+                  <div className="text-xs text-muted-foreground">
+                    {new Intl.DateTimeFormat("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }).format(new Date(Number(label)))}
+                  </div>
+                  <div className="mt-1 font-medium">
+                    {formatUnitPrice(point.unitPrice, currency, unit)}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {point.stores.join(", ")}
+                  </div>
+                </div>
+              );
+            }}
           />
 
           {targetUnitPrice !== null && (
@@ -127,10 +104,7 @@ export function PriceHistoryChart({
               stroke="currentColor"
               strokeDasharray="6 6"
               opacity={0.45}
-              label={{
-                value: "Target",
-                position: "insideTopRight",
-              }}
+              label={{ value: "Target", position: "insideTopRight" }}
             />
           )}
 

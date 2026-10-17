@@ -57,4 +57,7 @@ public sealed class ScrapeWorkerResult
 
     [JsonPropertyName("error")]
     public string? Error { get; init; }
+
+    [JsonPropertyName("observed_at")]
+    public DateTimeOffset? ObservedAt { get; init; }
 }

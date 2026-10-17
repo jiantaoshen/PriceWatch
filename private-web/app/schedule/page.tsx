@@ -1,6 +1,5 @@
 "use client";
 
-import { Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Page } from "@/components/page";
 import { Alert, AlertDescription } from "@pricewatch/ui/alert";
@@ -70,12 +69,18 @@ export default function SchedulePage() {
   }
 
   return (
-    <Page title="Schedule" description="Windows Task Scheduler launches PriceWatch.Private with --run-once.">
+    <Page
+      title="Schedule"
+      description="Windows Task Scheduler evaluates tracked items that have at least one source with Scraping ON. Items without scraping sources are skipped."
+    >
       <Card className="max-w-2xl gap-0 py-0">
         <CardContent className="p-5">
           <Alert className="mb-5">
             <AlertDescription>
-              Task: {schedule?.taskExists ? "installed" : "not installed"}
+              <div>Task: {schedule?.taskExists ? "installed" : "not installed"}</div>
+              <div className="mt-1">
+                Item check intervals are minimum intervals. The Windows task is the evaluation cadence, so an item cannot run more often than the task itself. Run now ignores item intervals.
+              </div>
             </AlertDescription>
           </Alert>
 
@@ -112,11 +117,9 @@ export default function SchedulePage() {
 
           <div className="mt-6 flex gap-2">
             <Button onClick={save} disabled={busy}>
-              <Save />
               Save schedule
             </Button>
             <Button variant="outline" onClick={remove} disabled={busy || !schedule?.taskExists}>
-              <Trash2 />
               Remove
             </Button>
           </div>

@@ -30,12 +30,12 @@ public sealed class PriceValidationService
         decimal quantity,
         CancellationToken ct = default)
     {
-        if (price <= 0)
+        if (price < 0)
         {
             return new PriceValidationDecision(
                 ScrapeResultStatus.Failed,
                 null,
-                "Price must be greater than zero.");
+                "Price cannot be negative.");
         }
 
         if (quantity <= 0)
@@ -48,64 +48,33 @@ public sealed class PriceValidationService
 
         var currentUnitPrice = price / quantity;
 
-        var previous = await _db.ScrapeResults
+        var previous = await _db.PriceObservations
             .AsNoTracking()
-            .Where(x =>
-                x.SourceId == source.Id &&
-                (
-                    x.ReviewStatus == ReviewStatus.NotRequired ||
-                    x.ReviewStatus == ReviewStatus.Accepted ||
-                    x.ReviewStatus == ReviewStatus.ManualOverride
-                ))
-            .OrderByDescending(x => x.ReviewedAt ?? x.CreatedAt)
+            .Where(x => x.SourceId == source.Id)
+            .OrderByDescending(x => x.ObservedAt)
+            .ThenByDescending(x => x.Id)
             .Select(x => new
             {
-                x.ScrapedPrice,
-                x.ScrapedQuantity,
-                x.ManualPrice,
-                x.ManualQuantity,
-                x.ReviewStatus
+                x.Price,
+                x.Quantity
             })
             .FirstOrDefaultAsync(ct);
 
-        decimal? previousUnitPrice = null;
+        decimal? baselineUnitPrice = previous is not null && previous.Quantity > 0
+            ? previous.Price / previous.Quantity
+            : null;
 
-        if (previous is not null)
-        {
-            if (
-                previous.ReviewStatus == ReviewStatus.ManualOverride &&
-                previous.ManualPrice.HasValue &&
-                previous.ManualQuantity.HasValue &&
-                previous.ManualQuantity.Value > 0)
-            {
-                previousUnitPrice =
-                    previous.ManualPrice.Value /
-                    previous.ManualQuantity.Value;
-            }
-            else if (
-                previous.ScrapedPrice.HasValue &&
-                previous.ScrapedQuantity.HasValue &&
-                previous.ScrapedQuantity.Value > 0)
-            {
-                previousUnitPrice =
-                    previous.ScrapedPrice.Value /
-                    previous.ScrapedQuantity.Value;
-            }
-        }
-
-        if (
-            !previousUnitPrice.HasValue &&
-            item.CurrentSourceId == source.Id &&
+        if (!baselineUnitPrice.HasValue &&
             item.CurrentPrice.HasValue &&
             item.CurrentQuantity.HasValue &&
             item.CurrentQuantity.Value > 0)
         {
-            previousUnitPrice =
+            baselineUnitPrice =
                 item.CurrentPrice.Value /
                 item.CurrentQuantity.Value;
         }
 
-        if (!previousUnitPrice.HasValue || previousUnitPrice.Value <= 0)
+        if (!baselineUnitPrice.HasValue || baselineUnitPrice.Value <= 0)
         {
             return new PriceValidationDecision(
                 ScrapeResultStatus.Success,
@@ -114,8 +83,8 @@ public sealed class PriceValidationService
         }
 
         var changeRatio =
-            Math.Abs(currentUnitPrice - previousUnitPrice.Value) /
-            previousUnitPrice.Value;
+            Math.Abs(currentUnitPrice - baselineUnitPrice.Value) /
+            baselineUnitPrice.Value;
 
         if (changeRatio > _settings.SuspiciousChangeRatio)
         {

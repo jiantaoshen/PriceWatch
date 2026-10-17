@@ -1,6 +1,5 @@
 "use client";
 
-import { Play, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Metric } from "@/components/metric";
 import { Page } from "@/components/page";
@@ -49,9 +48,15 @@ export default function DashboardPage() {
       title="Private dashboard"
       description="Local scraper control. Product data and accepted prices remain in Neon."
       action={
-        <Button onClick={runNow} disabled={busy || data?.coordinator.running}>
-          {data?.coordinator.running ? <RefreshCw className="animate-spin" /> : <Play />}
-          {data?.coordinator.running ? "Running…" : "Run now"}
+        <Button
+          onClick={runNow}
+          disabled={busy || data?.coordinator.running || data?.scrapingSources === 0}
+        >
+          {data?.coordinator.running
+            ? "Running…"
+            : data?.scrapingSources === 0
+              ? "No scraping sources"
+              : "Run now"}
         </Button>
       }
     >
@@ -61,10 +66,9 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Metric label="Active items" value={data?.activeItems ?? "—"} />
-        <Metric label="Automatic sources" value={data?.automaticSources ?? "—"} />
-        <Metric label="Manual sources" value={data?.manualSources ?? "—"} />
+        <Metric label="Scraping sources" value={data?.scrapingSources ?? "—"} />
         <Metric label="Pending reviews" value={data?.pendingReviews ?? "—"} />
       </div>
 

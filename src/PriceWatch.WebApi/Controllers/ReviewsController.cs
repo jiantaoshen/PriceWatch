@@ -8,367 +8,268 @@ using PriceWatch.WebApi.DTOs;
 
 namespace PriceWatch.WebApi.Controllers;
 
-
 [Authorize(Policy = "OwnerOnly")]
 [ApiController]
 [Route("api/reviews")]
 public class ReviewsController : ControllerBase
 {
     private readonly PriceWatchDbContext _db;
-    private readonly PriceUpdateService _priceUpdateService;
-
+    private readonly PriceTrackingService _prices;
 
     public ReviewsController(
         PriceWatchDbContext db,
-        PriceUpdateService priceUpdateService)
+        PriceTrackingService prices)
     {
         _db = db;
-        _priceUpdateService = priceUpdateService;
+        _prices = prices;
     }
 
+    [HttpGet("pending/count")]
+    public async Task<IActionResult> GetPendingCount(CancellationToken ct)
+    {
+        var count = await _db.ScrapeResults
+            .AsNoTracking()
+            .CountAsync(x => x.ReviewStatus == ReviewStatus.Pending, ct);
 
-    // ========================================================
-    // GET /api/reviews/pending
-    // ========================================================
+        return Ok(new { count });
+    }
 
     [HttpGet("pending")]
-    public async Task<IActionResult> GetPending(
-        CancellationToken ct)
+    public async Task<IActionResult> GetPending(CancellationToken ct)
     {
         var results = await _db.ScrapeResults
             .AsNoTracking()
-            .Where(x =>
-                x.ReviewStatus == ReviewStatus.Pending)
+            .Include(x => x.Item)
+            .Include(x => x.Source)
+            .Where(x => x.ReviewStatus == ReviewStatus.Pending)
             .OrderByDescending(x => x.CreatedAt)
-            .Select(x => new
-            {
-                x.Id,
-
-                x.RunId,
-
-                x.ItemId,
-
-                ItemName =
-                    x.Item.Name,
-
-                x.SourceId,
-
-                Store =
-                    x.Source != null
-                        ? x.Source.Store
-                        : null,
-
-                x.ResultStatus,
-
-                x.ReviewStatus,
-
-                x.ScrapedPrice,
-
-                x.ScrapedQuantity,
-
-                x.ScrapedUnitPrice,
-
-                CurrentUnitPrice =
-                    x.Item.CurrentUnitPrice,
-
-                TargetUnitPrice =
-                    x.Item.TargetUnitPrice,
-
-                x.SuspiciousReason,
-
-                x.Error,
-
-                x.CreatedAt
-            })
             .ToListAsync(ct);
 
+        var sourceIds = results.Select(x => x.SourceId).Distinct().ToArray();
+        var observations = await _db.PriceObservations
+            .AsNoTracking()
+            .Where(x => sourceIds.Contains(x.SourceId))
+            .OrderByDescending(x => x.ObservedAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
 
-        return Ok(results);
+        var lastBySource = observations
+            .GroupBy(x => x.SourceId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return Ok(results.Select(result =>
+        {
+            lastBySource.TryGetValue(result.SourceId, out var last);
+            var lastKnownUnitPrice = last is not null && last.Quantity > 0
+                ? last.Price / last.Quantity
+                : (decimal?)null;
+
+            return new
+            {
+                result.Id,
+                result.RunId,
+                result.ItemId,
+                ItemName = result.Item.Name,
+                result.SourceId,
+                result.Source.Store,
+                result.Source.DefaultQuantity,
+                result.ResultStatus,
+                result.ReviewStatus,
+                result.ScrapedPrice,
+                result.ScrapedQuantity,
+                result.ScrapedUnitPrice,
+                CurrentUnitPrice = result.Item.CurrentUnitPrice,
+                TargetUnitPrice = result.Item.TargetUnitPrice,
+                LastKnownUnitPrice = lastKnownUnitPrice,
+                HasLastKnownPrice = last is not null,
+                result.SuspiciousReason,
+                result.Error,
+                result.ObservedAt,
+                result.CreatedAt,
+                result.Item.Currency,
+                result.Item.Unit
+            };
+        }));
     }
 
-
-    // ========================================================
-    // POST /api/reviews/{id}/accept
-    //
-    // Accept the scraped value exactly as returned.
-    // ========================================================
-
-    [HttpPost("{id:long}/accept")]
-    public async Task<IActionResult> Accept(
+    [HttpPost("{id:long}/confirm")]
+    public async Task<IActionResult> Confirm(
         long id,
         CancellationToken ct)
     {
-        await using var transaction =
-            await _db.Database.BeginTransactionAsync(ct);
+        var target = await GetReviewTargetAsync(id, ct);
+        if (target is null)
+            return NotFound();
+        if (target.ReviewStatus != ReviewStatus.Pending)
+            return AlreadyReviewed();
+        if (target.ResultStatus != ScrapeResultStatus.Suspicious ||
+            !target.ScrapedPrice.HasValue ||
+            !target.ScrapedQuantity.HasValue ||
+            target.ScrapedPrice.Value < 0 ||
+            target.ScrapedQuantity.Value <= 0)
+        {
+            return BadRequest(new
+            {
+                error = "Only a suspicious result with a usable scraped price can be confirmed."
+            });
+        }
 
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        var now = DateTimeOffset.UtcNow;
 
-        var result = await _db.ScrapeResults
-            .SingleOrDefaultAsync(
-                x => x.Id == id,
+        var updated = await _db.ScrapeResults
+            .Where(x => x.Id == id && x.ReviewStatus == ReviewStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.ReviewStatus, ReviewStatus.Accepted)
+                    .SetProperty(x => x.ReviewedAt, now),
                 ct);
 
+        if (updated != 1)
+            return AlreadyReviewed();
 
-        if (result is null)
-        {
-            return NotFound();
-        }
-
-
-        if (result.ReviewStatus != ReviewStatus.Pending)
-        {
-            return Conflict(new
-            {
-                error =
-                    "This scrape result has already been reviewed."
-            });
-        }
-
-
-        if (
-            result.ScrapedPrice is null ||
-            result.ScrapedQuantity is null)
-        {
-            return BadRequest(new
-            {
-                error =
-                    "This scrape result does not contain a usable scraped price and quantity."
-            });
-        }
-
-
-        if (result.ScrapedQuantity <= 0)
-        {
-            return BadRequest(new
-            {
-                error =
-                    "Scraped quantity must be greater than zero."
-            });
-        }
-
-
-        if (result.ScrapedPrice < 0)
-        {
-            return BadRequest(new
-            {
-                error =
-                    "Scraped price cannot be negative."
-            });
-        }
-
-
-        var now =
-            DateTimeOffset.UtcNow;
-
-
-        result.ReviewStatus =
-            ReviewStatus.Accepted;
-
-        result.ReviewedAt =
-            now;
-
-
-        await _priceUpdateService.ApplyAcceptedPriceAsync(
-            itemId:
-                result.ItemId,
-
-            price:
-                result.ScrapedPrice.Value,
-
-            quantity:
-                result.ScrapedQuantity.Value,
-
-            origin:
-                PriceOrigin.Scrape,
-
-            sourceId:
-                result.SourceId,
-
-            scrapeResultId:
-                result.Id,
-
-            cancellationToken: ct);
-
+        _prices.AddObservation(
+            target.ItemId,
+            target.SourceId,
+            target.ScrapedPrice.Value,
+            target.ScrapedQuantity.Value,
+            PriceOrigin.Scrape,
+            target.ObservedAt,
+            id);
 
         await _db.SaveChangesAsync(ct);
-
+        await _prices.RecalculateBestPriceAsync(
+            target.ItemId,
+            BestPriceChangeCause.Review,
+            now,
+            ct);
+        await _db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
-
         return NoContent();
     }
 
-
-    // ========================================================
-    // POST /api/reviews/{id}/reject
-    //
-    // Reject does NOT modify CurrentPrice or PriceHistory.
-    // ========================================================
-
-    [HttpPost("{id:long}/reject")]
-    public async Task<IActionResult> Reject(
+    [HttpPost("{id:long}/use-last")]
+    public async Task<IActionResult> UseLastKnownPrice(
         long id,
-        [FromBody] RejectReviewRequest? request,
+        [FromBody] UseLastReviewRequest? request,
         CancellationToken ct)
     {
-        var result = await _db.ScrapeResults
-            .SingleOrDefaultAsync(
-                x => x.Id == id,
-                ct);
-
-
-        if (result is null)
-        {
+        var target = await GetReviewTargetAsync(id, ct);
+        if (target is null)
             return NotFound();
-        }
+        if (target.ReviewStatus != ReviewStatus.Pending)
+            return AlreadyReviewed();
 
+        var hasLastKnown = await _db.PriceObservations
+            .AsNoTracking()
+            .AnyAsync(x => x.SourceId == target.SourceId, ct);
 
-        if (result.ReviewStatus != ReviewStatus.Pending)
+        if (!hasLastKnown)
         {
-            return Conflict(new
+            return BadRequest(new
             {
-                error =
-                    "This scrape result has already been reviewed."
+                error = "This source has no last known price. Enter a manual price instead."
             });
         }
 
+        var updated = await _db.ScrapeResults
+            .Where(x => x.Id == id && x.ReviewStatus == ReviewStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.ReviewStatus, ReviewStatus.Rejected)
+                    .SetProperty(x => x.ReviewNote, Normalize(request?.Note))
+                    .SetProperty(x => x.ReviewedAt, DateTimeOffset.UtcNow),
+                ct);
 
-        result.ReviewStatus =
-            ReviewStatus.Rejected;
-
-        result.ReviewNote =
-            Normalize(request?.Note);
-
-        result.ReviewedAt =
-            DateTimeOffset.UtcNow;
-
-
-        await _db.SaveChangesAsync(ct);
-
-
-        return NoContent();
+        return updated == 1 ? NoContent() : AlreadyReviewed();
     }
 
-
-    // ========================================================
-    // POST /api/reviews/{id}/manual
-    //
-    // Ignore the scraped value and accept a manually
-    // corrected package price / quantity instead.
-    // ========================================================
-
     [HttpPost("{id:long}/manual")]
-    public async Task<IActionResult> ManualOverride(
+    public async Task<IActionResult> Manual(
         long id,
         [FromBody] ManualReviewRequest request,
         CancellationToken ct)
     {
         if (request.Price < 0)
-        {
-            return BadRequest(new
-            {
-                error =
-                    "Price cannot be negative."
-            });
-        }
-
-
+            return BadRequest(new { error = "Price cannot be negative." });
         if (request.Quantity <= 0)
-        {
-            return BadRequest(new
-            {
-                error =
-                    "Quantity must be greater than zero."
-            });
-        }
+            return BadRequest(new { error = "Quantity must be greater than zero." });
 
-
-        await using var transaction =
-            await _db.Database.BeginTransactionAsync(ct);
-
-
-        var result = await _db.ScrapeResults
-            .SingleOrDefaultAsync(
-                x => x.Id == id,
-                ct);
-
-
-        if (result is null)
-        {
+        var target = await GetReviewTargetAsync(id, ct);
+        if (target is null)
             return NotFound();
-        }
+        if (target.ReviewStatus != ReviewStatus.Pending)
+            return AlreadyReviewed();
 
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        var now = DateTimeOffset.UtcNow;
 
-        if (result.ReviewStatus != ReviewStatus.Pending)
-        {
-            return Conflict(new
-            {
-                error =
-                    "This scrape result has already been reviewed."
-            });
-        }
-
-
-        var now =
-            DateTimeOffset.UtcNow;
-
-
-        result.ManualPrice =
-            request.Price;
-
-        result.ManualQuantity =
-            request.Quantity;
-
-        result.ReviewNote =
-            Normalize(request.Note);
-
-        result.ReviewStatus =
-            ReviewStatus.ManualOverride;
-
-        result.ReviewedAt =
-            now;
-
-
-        await _priceUpdateService.ApplyAcceptedPriceAsync(
-            itemId:
-                result.ItemId,
-
-            price:
-                request.Price,
-
-            quantity:
-                request.Quantity,
-
-            origin:
-                PriceOrigin.ManualOverride,
-
-            sourceId:
-                result.SourceId,
-
-            scrapeResultId:
-                result.Id,
-
-            cancellationToken:
+        var updated = await _db.ScrapeResults
+            .Where(x => x.Id == id && x.ReviewStatus == ReviewStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(x => x.ReviewNote, Normalize(request.Note))
+                    .SetProperty(x => x.ReviewStatus, ReviewStatus.ManualOverride)
+                    .SetProperty(x => x.ReviewedAt, now),
                 ct);
 
+        if (updated != 1)
+            return AlreadyReviewed();
+
+        _prices.AddObservation(
+            target.ItemId,
+            target.SourceId,
+            request.Price,
+            request.Quantity,
+            PriceOrigin.Manual,
+            now);
 
         await _db.SaveChangesAsync(ct);
-
+        await _prices.RecalculateBestPriceAsync(
+            target.ItemId,
+            BestPriceChangeCause.Review,
+            now,
+            ct);
+        await _db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-
 
         return NoContent();
     }
 
-
-    // ========================================================
-    // Helper
-    // ========================================================
-
-    private static string? Normalize(
-        string? value)
+    private async Task<ReviewTarget?> GetReviewTargetAsync(
+        long id,
+        CancellationToken ct)
     {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
+        return await _db.ScrapeResults
+            .AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new ReviewTarget(
+                x.ItemId,
+                x.SourceId,
+                x.ResultStatus,
+                x.ReviewStatus,
+                x.ScrapedPrice,
+                x.ScrapedQuantity,
+                x.ObservedAt))
+            .SingleOrDefaultAsync(ct);
     }
+
+    private IActionResult AlreadyReviewed() => Conflict(new
+    {
+        error = "This review was already resolved.",
+        reason = "already_reviewed"
+    });
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed record ReviewTarget(
+        Guid ItemId,
+        long SourceId,
+        ScrapeResultStatus ResultStatus,
+        ReviewStatus ReviewStatus,
+        decimal? ScrapedPrice,
+        decimal? ScrapedQuantity,
+        DateTimeOffset ObservedAt);
 }

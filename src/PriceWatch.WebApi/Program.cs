@@ -2,9 +2,11 @@ using System.Security.Claims;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Microsoft.Identity.Web;
 using PriceWatch.Core.Services;
 using PriceWatch.Data;
+using PriceWatch.WebApi.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +14,9 @@ var builder = WebApplication.CreateBuilder(args);
 // ============================================================
 // Controllers
 // ============================================================
+
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 builder.Services
     .AddControllers()
@@ -25,13 +30,25 @@ builder.Services
 // Database
 // ============================================================
 
+var connectionString =
+    builder.Configuration.GetConnectionString("Database")
+    ?? throw new InvalidOperationException(
+        "Database connection string is missing.");
+
+try
+{
+    _ = new NpgsqlConnectionStringBuilder(connectionString);
+}
+catch
+{
+    // Do not preserve the provider exception as an inner exception. Npgsql may
+    // include the original connection string in its exception message.
+    throw new InvalidOperationException(
+        "Database connection string is invalid.");
+}
+
 builder.Services.AddDbContextPool<PriceWatchDbContext>(options =>
 {
-    var connectionString =
-        builder.Configuration.GetConnectionString("Database")
-        ?? throw new InvalidOperationException(
-            "Database connection string is missing.");
-
     options
         .UseNpgsql(connectionString)
         .UseSnakeCaseNamingConvention();
@@ -42,8 +59,9 @@ builder.Services.AddDbContextPool<PriceWatchDbContext>(options =>
 // Core services
 // ============================================================
 
-builder.Services.AddScoped<PriceUpdateService>();
 
+
+builder.Services.AddScoped<PriceTrackingService>();
 
 // ============================================================
 // Microsoft Authentication
@@ -127,15 +145,24 @@ builder.Services.AddAuthorization(options =>
 // CORS
 // ============================================================
 
+var frontendOrigin =
+    builder.Configuration["Frontend:Origin"]
+    ?? "http://localhost:3000";
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
+        var allowedOrigins = new[]
+        {
+            frontendOrigin,
+            "https://pricewatch.jiantao.dev"
+        }
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "https://pricewatch.jiantao.dev"
-            )
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -148,6 +175,8 @@ var app = builder.Build();
 // ============================================================
 // HTTP pipeline
 // ============================================================
+
+app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 

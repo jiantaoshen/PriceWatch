@@ -1,6 +1,5 @@
 "use client";
 
-import { CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -8,10 +7,12 @@ import { EmptyState } from "@/components/empty-state";
 import { ProductsSkeleton } from "@/components/products-skeleton";
 import { SubscriptionCard } from "@/components/subscription-card";
 import { SubscriptionStatusNav, type SubscriptionFilter } from "@/components/subscription-status-nav";
-import { SubscriptionToolbar, type SubscriptionSort } from "@/components/subscription-toolbar";
+import { ItemListToolbar } from "@/components/product-list-toolbar";
 import { WorkspacePage } from "@/components/workspace-page";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { ItemListItem } from "@/lib/types";
+
+type SubscriptionSort = "name" | "current-price";
 
 async function fetchSubscriptionsData(accessToken: string) {
   return apiFetch<ItemListItem[]>("/api/items?includeArchived=true", accessToken);
@@ -98,7 +99,19 @@ export default function SubscriptionsPage() {
         currency={currency}
       />
 
-      <SubscriptionToolbar search={search} onSearchChange={setSearch} sort={sort} onSortChange={setSort} />
+      <ItemListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        sort={sort}
+        onSortChange={setSort}
+        sortOptions={[
+          { value: "name", label: "Name" },
+          { value: "current-price", label: "Monthly price" },
+        ]}
+        searchPlaceholder="Search subscriptions…"
+        actionLabel="Add subscription"
+        actionHref="/subscriptions/new"
+      />
 
       <p className="text-sm text-muted-foreground">
         Showing <span className="font-medium text-foreground">{filteredSubscriptions.length}</span>{" "}
@@ -109,7 +122,6 @@ export default function SubscriptionsPage() {
         <ProductsSkeleton />
       ) : !account ? (
         <EmptyState
-          icon={CreditCard}
           title="Sign in to view subscriptions"
           description="Use the Login button in the top-right corner."
         />
@@ -117,15 +129,13 @@ export default function SubscriptionsPage() {
         <ProductsSkeleton />
       ) : forbidden ? (
         <EmptyState
-          icon={CreditCard}
           title="No data available"
           description="This Microsoft account does not have access to the PriceWatch data."
         />
       ) : error ? (
-        <EmptyState icon={CreditCard} title="Could not load subscriptions" description={error} />
+        <EmptyState title="Could not load subscriptions" description={error} />
       ) : filteredSubscriptions.length === 0 ? (
         <EmptyState
-          icon={CreditCard}
           title="No subscriptions here"
           description="Try another status, change your search, or add a subscription."
         />
