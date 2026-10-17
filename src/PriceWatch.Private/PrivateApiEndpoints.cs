@@ -63,7 +63,74 @@ public static class PrivateApiEndpoints
             return Results.NoContent();
         });
 
+        group.MapGet("/email-settings", async (
+            EmailAlertSettingsStore store,
+            CancellationToken ct) =>
+            Results.Ok(await store.GetResponseAsync(ct)));
+
+        group.MapPut("/email-settings", SaveEmailSettingsAsync);
+        group.MapPost("/email-settings/test", SendTestEmailAsync);
+
         return endpoints;
+    }
+
+    private static async Task<IResult> SaveEmailSettingsAsync(
+        UpdateEmailSettingsRequest request,
+        EmailAlertSettingsStore store,
+        CancellationToken ct)
+    {
+        try
+        {
+            return Results.Ok(await store.SaveAsync(request, ct));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(new
+            {
+                error = exception.Message
+            });
+        }
+    }
+
+    private static async Task<IResult> SendTestEmailAsync(
+        PriceAlertEmailSender sender,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct)
+    {
+        try
+        {
+            await sender.SendTestAsync(ct);
+            return Results.Ok(new
+            {
+                status = "sent"
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.BadRequest(new
+            {
+                error = exception.Message
+            });
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            var errorId = Guid.NewGuid();
+            var logger = loggerFactory.CreateLogger("PriceWatch.Private.EmailTest");
+
+            logger.LogError(
+                "Test email delivery failed. ErrorId={ErrorId}, Type={ExceptionType}, StackTrace={StackTrace}",
+                errorId,
+                exception.GetType().FullName,
+                exception.StackTrace);
+
+            return Results.Problem(
+                detail: $"Test email could not be sent. Error ID: {errorId}",
+                statusCode: StatusCodes.Status502BadGateway);
+        }
     }
 
     private static async Task<IResult> StartRunAsync(

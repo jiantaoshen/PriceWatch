@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using PriceWatch.Core.Services;
@@ -14,9 +15,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddDataProtection()
+    .SetApplicationName("PriceWatch.Private");
 
 builder.Services.Configure<PrivateSettings>(
     builder.Configuration.GetSection("Private"));
+builder.Services.Configure<EmailAlertSettings>(
+    builder.Configuration.GetSection("Email"));
 
 var settings = builder.Configuration
     .GetSection("Private")
@@ -79,10 +84,12 @@ builder.Services.AddScoped<PythonScraperClient>();
 builder.Services.AddScoped<PriceValidationService>();
 builder.Services.AddScoped<ScrapeOrchestrator>();
 builder.Services.AddScoped<ScrapeRunRecoveryService>();
+builder.Services.AddScoped<PriceAlertEmailSender>();
 
 builder.Services.AddSingleton<PostgreSqlScrapeLock>();
 builder.Services.AddSingleton<ScrapeRunCoordinator>();
 builder.Services.AddSingleton<PrivatePaths>();
+builder.Services.AddSingleton<EmailAlertSettingsStore>();
 builder.Services.AddSingleton<WindowsScheduleService>();
 
 var app = builder.Build();
