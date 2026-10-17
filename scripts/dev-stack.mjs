@@ -92,6 +92,24 @@ function removeAppSecrets(env) {
     "AzureAd__TenantId",
     "PRIVATE_API_TOKEN",
     "Private__ApiToken",
+    "EMAIL_ENABLED",
+    "EMAIL_SMTP_HOST",
+    "EMAIL_SMTP_PORT",
+    "EMAIL_USE_SSL",
+    "EMAIL_TIMEOUT_SECONDS",
+    "EMAIL_USERNAME",
+    "EMAIL_PASSWORD",
+    "EMAIL_FROM",
+    "EMAIL_TO",
+    "Email__Enabled",
+    "Email__SmtpHost",
+    "Email__SmtpPort",
+    "Email__UseSsl",
+    "Email__TimeoutSeconds",
+    "Email__Username",
+    "Email__Password",
+    "Email__From",
+    "Email__To",
   ]) {
     delete env[key];
   }
@@ -204,6 +222,20 @@ function buildPrivateEnvs(source, part) {
       "Private__SuspiciousChangeRatio",
       source.PRIVATE_SUSPICIOUS_CHANGE_RATIO
     );
+
+    assignIfPresent(backendEnv, "Email__Enabled", source.EMAIL_ENABLED);
+    assignIfPresent(backendEnv, "Email__SmtpHost", source.EMAIL_SMTP_HOST);
+    assignIfPresent(backendEnv, "Email__SmtpPort", source.EMAIL_SMTP_PORT);
+    assignIfPresent(backendEnv, "Email__UseSsl", source.EMAIL_USE_SSL);
+    assignIfPresent(
+      backendEnv,
+      "Email__TimeoutSeconds",
+      source.EMAIL_TIMEOUT_SECONDS
+    );
+    assignIfPresent(backendEnv, "Email__Username", source.EMAIL_USERNAME);
+    assignIfPresent(backendEnv, "Email__Password", source.EMAIL_PASSWORD);
+    assignIfPresent(backendEnv, "Email__From", source.EMAIL_FROM);
+    assignIfPresent(backendEnv, "Email__To", source.EMAIL_TO);
 
     if (source.PRIVATE_PYTHON_EXECUTABLE) {
       const pythonExecutable = source.PRIVATE_PYTHON_EXECUTABLE;

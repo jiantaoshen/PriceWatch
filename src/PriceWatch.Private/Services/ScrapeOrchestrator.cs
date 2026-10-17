@@ -13,6 +13,7 @@ public sealed class ScrapeOrchestrator
     private readonly PythonScraperClient _python;
     private readonly PriceValidationService _validation;
     private readonly PriceTrackingService _prices;
+    private readonly PriceAlertEmailSender _alerts;
     private readonly ILogger<ScrapeOrchestrator> _logger;
 
     public ScrapeOrchestrator(
@@ -20,12 +21,14 @@ public sealed class ScrapeOrchestrator
         PythonScraperClient python,
         PriceValidationService validation,
         PriceTrackingService prices,
+        PriceAlertEmailSender alerts,
         ILogger<ScrapeOrchestrator> logger)
     {
         _db = db;
         _python = python;
         _validation = validation;
         _prices = prices;
+        _alerts = alerts;
         _logger = logger;
     }
 
@@ -33,6 +36,11 @@ public sealed class ScrapeOrchestrator
         ScrapeTrigger trigger,
         CancellationToken ct = default)
     {
+        // Retry persisted alert deliveries before starting new scraping work.
+        // This covers a prior process exit after the price transaction committed
+        // but before its email could be delivered.
+        await _alerts.SendOutstandingAsync(ct);
+
         var startedAt = DateTimeOffset.UtcNow;
 
         var items = await _db.TrackedItems
@@ -266,6 +274,10 @@ public sealed class ScrapeOrchestrator
             run.FinishedAt = DateTimeOffset.UtcNow;
             run.Status = DetermineRunStatus(run, runHadAcceptedResult);
             await _db.SaveChangesAsync(ct);
+
+            // PriceAlertEvent is persisted as part of the price-state transaction.
+            // Deliver only after those writes have committed.
+            await _alerts.SendOutstandingAsync(ct);
 
             _logger.LogInformation(
                 "Finished scrape run {RunId}: {Status}. Success={Success}, Suspicious={Suspicious}, Failed={Failed}.",

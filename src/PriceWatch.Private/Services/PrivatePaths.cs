@@ -33,4 +33,8 @@ public sealed class PrivatePaths
     public string ScheduleFile => Path.Combine(
         SettingsDirectory,
         "schedule.json");
+
+    public string EmailSettingsFile => Path.Combine(
+        SettingsDirectory,
+        "email.json");
 }
