@@ -1,3 +1,5 @@
+# DESIGN.md
+
 # PriceWatch System Design
 
 ## 1. Product Goal
@@ -681,6 +683,101 @@ Browser access is proxy-only.
 Neon PostgreSQL is the shared source of truth.
 
 The execution plane remains local-only.
+
+## 7.1 Public WebApi Container Deployment
+
+`PriceWatch.WebApi` is deployed as a Docker container to Google Cloud Run.
+
+The deployment pipeline is owned by:
+
+```text
+.github/workflows/webapi-cicd.yml
+Dockerfile.webapi
+```
+
+Normal backend deployment flow:
+
+```text
+merge / push to main
+→ GitHub Actions CI
+→ dotnet restore
+→ dotnet build
+→ dotnet test
+→ verify Docker build
+→ build production Docker image
+→ push image to GitHub Container Registry (GHCR)
+→ deploy the commit-SHA image to Google Cloud Run
+```
+
+Published image tags:
+
+```text
+ghcr.io/jiantaoshen/pricewatch-webapi:<commit SHA>
+ghcr.io/jiantaoshen/pricewatch-webapi:latest
+```
+
+Production deployment must use the immutable commit-SHA tag.
+
+`latest` may be published for convenience, but must not be the authoritative production deployment reference.
+
+Automatic production deployment is allowed only when CI succeeds.
+
+### Database Migration Deployment Guard
+
+Changes under:
+
+```text
+src/PriceWatch.Data/Migrations/**
+```
+
+require a deployment safety gate.
+
+When a `main` update contains database migration changes:
+
+```text
+CI succeeds
+→ production image is still built
+→ image is still pushed to GHCR
+→ automatic Cloud Run deployment is paused
+```
+
+The database migration must be reviewed and applied explicitly before the new application revision is deployed.
+
+After the migration has been applied successfully, the operator may manually trigger the WebApi deployment workflow for `main` with the explicit post-migration deployment option enabled.
+
+Database migration must not run implicitly as a container startup side effect.
+
+The intended ordering is:
+
+```text
+review migration
+→ apply database migration
+→ explicitly deploy the matching application revision
+```
+
+This prevents a new WebApi revision from starting against an incompatible older database schema.
+
+### Deployment Concurrency
+
+Production deployments must be serialized so that overlapping `main` updates cannot race each other.
+
+Pull-request CI may cancel superseded runs, but production deployment runs must not be canceled merely because a newer deployment starts.
+
+### Scope
+
+The automatic container deployment applies to the public `PriceWatch.WebApi` Cloud Run service.
+
+It does not imply automatic deployment of:
+
+```text
+web
+private-web
+PriceWatch.Private
+Python scraper
+Windows Task Scheduler
+```
+
+Those components retain their existing deployment/execution model unless explicitly redesigned.
 
 ---
 
