@@ -1,6 +1,5 @@
 "use client";
 
-import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Page } from "@/components/page";
 import { StatusBadge } from "@/components/status-badge";
@@ -27,20 +26,18 @@ export default function ItemsPage() {
     return query
       ? items.filter((item) =>
           item.name.toLowerCase().includes(query) ||
-          item.currentStore?.toLowerCase().includes(query),
+          item.currentStores.some((store) => store.toLowerCase().includes(query)),
         )
       : items;
   }, [items, search]);
 
   return (
     <Page title="Items" description="Read-only Neon view used by the local scraper.">
-      <div className="relative mb-5 max-w-xl">
-        <Search className="absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="mb-5 max-w-xl">
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search items or stores…"
-          className="pl-9"
         />
       </div>
 
@@ -58,10 +55,10 @@ export default function ItemsPage() {
                 <div>
                   <h2 className="line-clamp-2 font-semibold">{item.name}</h2>
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {item.itemType} · {item.updateMode} · {item.sourceCount} sources
+                    {item.itemType} · {item.sourceCount} sources
                   </div>
                 </div>
-                <StatusBadge value={item.archivedAt ? "Archived" : item.belowTarget ? "Below target" : "Active"} />
+                <StatusBadge value={item.archivedAt ? "Archived" : isBelowTarget(item) ? "Below target" : "Active"} />
               </div>
 
               <div className="mt-5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -70,8 +67,8 @@ export default function ItemsPage() {
               <div className="mt-1 text-2xl font-semibold tabular-nums">
                 {formatUnitPrice(item.currentUnitPrice, item.currency, item.unit)}
               </div>
-              {item.currentStore && (
-                <div className="mt-1 text-sm text-muted-foreground">Best at {item.currentStore}</div>
+              {item.currentStores.length > 0 && (
+                <div className="mt-1 text-sm text-muted-foreground">Best at {item.currentStores.join(", ")}</div>
               )}
 
               <div className="mt-5 grid grid-cols-2 gap-3">
@@ -80,8 +77,20 @@ export default function ItemsPage() {
               </div>
 
               <div className="mt-4 border-t pt-4 text-xs text-muted-foreground">
-                <div className="flex justify-between gap-3"><span>Automatic</span><span>{item.automaticSourceCount}</span></div>
-                <div className="mt-1 flex justify-between gap-3"><span>Manual</span><span>{item.manualSourceCount}</span></div>
+                <div className="flex justify-between gap-3">
+                  <span>Scraping</span>
+                  <span>{item.hasScrapingSources ? "ON" : "OFF"}</span>
+                </div>
+                <div className="mt-1 flex justify-between gap-3">
+                  <span>Schedule</span>
+                  <span>
+                    {!item.hasScrapingSources
+                      ? "Off"
+                      : item.checkIntervalMinutes !== null
+                        ? `Min ${item.checkIntervalMinutes} min`
+                        : "Every task run"}
+                  </span>
+                </div>
                 <div className="mt-1 flex justify-between gap-3"><span>Last checked</span><span>{formatDateTime(item.lastCheckedAt)}</span></div>
               </div>
             </CardContent>
@@ -89,6 +98,14 @@ export default function ItemsPage() {
         ))}
       </div>
     </Page>
+  );
+}
+
+function isBelowTarget(item: PrivateItem) {
+  return (
+    item.currentUnitPrice !== null &&
+    item.targetUnitPrice !== null &&
+    item.currentUnitPrice <= item.targetUnitPrice
   );
 }
 

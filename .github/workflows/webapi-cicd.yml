@@ -20,6 +20,16 @@ on:
       - ".github/workflows/webapi-cicd.yml"
 
   workflow_dispatch:
+    inputs:
+      deploy_after_migration:
+        description: "Deploy current main after the database migration has been applied"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: webapi-cicd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   IMAGE: ghcr.io/jiantaoshen/pricewatch-webapi
@@ -53,21 +63,51 @@ jobs:
       - name: Verify Docker build
         run: docker build -f Dockerfile.webapi -t pricewatch-webapi:ci .
 
-  deploy:
-    name: Push and deploy
+  publish:
+    name: Publish image
     runs-on: ubuntu-latest
     needs: ci
 
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
 
     permissions:
       contents: read
       packages: write
-      id-token: write
+
+    outputs:
+      migration_changed: ${{ steps.migration_changes.outputs.changed }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect database migration changes
+        id: migration_changes
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" != "push" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          before="${{ github.event.before }}"
+
+          if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
+            before="$(git rev-parse "${GITHUB_SHA}^")"
+          fi
+
+          if git diff --quiet \
+            "$before" \
+            "$GITHUB_SHA" \
+            -- src/PriceWatch.Data/Migrations/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -89,6 +129,55 @@ jobs:
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
 
+      - name: Explain migration deployment guard
+        if: >
+          github.event_name == 'push' &&
+          steps.migration_changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          {
+            echo "## Production deployment paused"
+            echo ""
+            echo "Database migration files changed in this main update."
+            echo ""
+            echo "The WebApi image was successfully built and published to GHCR,"
+            echo "but Cloud Run was intentionally not updated."
+            echo ""
+            echo "### Next steps"
+            echo ""
+            echo "1. Review and apply the database migration."
+            echo "2. Open the WebApi CI/CD workflow."
+            echo "3. Select the main branch."
+            echo "4. Choose **Run workflow**."
+            echo "5. Enable **deploy_after_migration**."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+
+    needs:
+      - ci
+      - publish
+
+    if: >
+      github.ref == 'refs/heads/main' &&
+      (
+        (
+          github.event_name == 'push' &&
+          needs.publish.outputs.migration_changed != 'true'
+        ) ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          inputs.deploy_after_migration == true
+        )
+      )
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
@@ -100,6 +189,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Deploy to Cloud Run
+        shell: bash
         run: |
           gcloud run services update "$SERVICE" \
             --project "$PROJECT_ID" \

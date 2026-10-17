@@ -1,38 +1,74 @@
 "use client";
 
-import { Check, CircleAlert, ExternalLink, PencilLine, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { EmptyState } from "@/components/empty-state";
 import { WorkspacePage } from "@/components/workspace-page";
-import { Alert, AlertDescription } from "@pricewatch/ui/alert";
+import {
+  Alert,
+  AlertDescription,
+} from "@pricewatch/ui/alert";
 import { Badge } from "@pricewatch/ui/badge";
-import { Button, buttonVariants } from "@pricewatch/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@pricewatch/ui/card";
+import {
+  Button,
+  buttonVariants,
+} from "@pricewatch/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@pricewatch/ui/card";
 import { Input } from "@pricewatch/ui/input";
 import { Label } from "@pricewatch/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, apiFetch } from "@/lib/api";
-import { formatDateTime, formatUnitPrice } from "@pricewatch/shared/format";
+import {
+  ApiError,
+  apiFetch,
+} from "@/lib/api";
+import {
+  formatDateTime,
+  formatUnitPrice,
+} from "@pricewatch/shared/format";
 import type { PendingReview } from "@/lib/types";
 
-async function fetchReviewsData(accessToken: string) {
-  return apiFetch<PendingReview[]>("/api/reviews/pending", accessToken);
+async function fetchReviewsData(
+  accessToken: string
+) {
+  return apiFetch<PendingReview[]>(
+    "/api/reviews/pending",
+    accessToken
+  );
 }
 
 export default function ReviewsPage() {
-  const { ready, account, getAccessToken } = useAuth();
+  const {
+    ready,
+    account,
+    getAccessToken,
+  } = useAuth();
 
-  const [reviews, setReviews] = useState<PendingReview[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [reviews, setReviews] =
+    useState<PendingReview[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [busyId, setBusyId] =
+    useState<number | null>(null);
 
   useEffect(() => {
-    if (!ready || !account) return;
+    if (!ready || !account) {
+      return;
+    }
 
     let cancelled = false;
 
@@ -43,44 +79,97 @@ export default function ReviewsPage() {
           setError(null);
         }
 
-        return fetchReviewsData(token.accessToken);
+        return fetchReviewsData(
+          token.accessToken
+        );
       })
-      .then((reviews) => {
-        if (!cancelled) setReviews(reviews);
+      .then((value) => {
+        if (!cancelled) {
+          setReviews(value);
+        }
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
-        if (err instanceof ApiError && err.status === 403) {
-          setError("No data available.");
+        if (
+          err instanceof ApiError &&
+          err.status === 403
+        ) {
+          setError(
+            "No data available."
+          );
         } else {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(
+            err instanceof Error
+              ? err.message
+              : String(err)
+          );
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [ready, account, getAccessToken]);
+  }, [
+    ready,
+    account,
+    getAccessToken,
+  ]);
 
-  async function postAction(reviewId: number, action: "accept" | "reject" | "manual", body?: unknown) {
+  async function postAction(
+    reviewId: number,
+    action:
+      | "confirm"
+      | "use-last"
+      | "manual",
+    body?: unknown
+  ) {
     setBusyId(reviewId);
     setError(null);
 
     try {
-      const token = await getAccessToken();
+      const token =
+        await getAccessToken();
 
-      await apiFetch<void>(`/api/reviews/${reviewId}/${action}`, token.accessToken, {
-        method: "POST",
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      });
+      await apiFetch<void>(
+        `/api/reviews/${reviewId}/${action}`,
+        token.accessToken,
+        {
+          method: "POST",
+          ...(body !== undefined
+            ? {
+                body: JSON.stringify(
+                  body
+                ),
+              }
+            : {}),
+        }
+      );
 
-      setReviews(await fetchReviewsData(token.accessToken));
+      setReviews(
+        await fetchReviewsData(
+          token.accessToken
+        )
+      );
+
+      window.dispatchEvent(
+        new Event(
+          "pricewatch:reviews-changed"
+        )
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(
+        err instanceof Error
+          ? err.message
+          : String(err)
+      );
     } finally {
       setBusyId(null);
     }
@@ -89,43 +178,61 @@ export default function ReviewsPage() {
   return (
     <WorkspacePage
       title="Reviews"
-      description="Review suspicious scrape results before they change an accepted item price."
-      headerAction={
-        <Badge variant={reviews.length > 0 ? "default" : "secondary"} className="w-fit">
-          {reviews.length} {reviews.length === 1 ? "pending review" : "pending reviews"}
-        </Badge>
-      }
+      description="Resolve sources where PriceWatch could not determine a trustworthy new price."
     >
       <div className="max-w-5xl">
         {error && (
-          <Alert variant="destructive" className="mt-6">
-            <CircleAlert className="size-4" />
-            <AlertDescription>{error}</AlertDescription>
+          <Alert
+            variant="destructive"
+            className="mt-6"
+          >
+            <AlertDescription>
+              {error}
+            </AlertDescription>
           </Alert>
         )}
 
         <div className="mt-6 space-y-4">
-          {!ready ? (
+          {!ready || loading ? (
             <LoadingReviews />
           ) : !account ? (
             <EmptyState
-              icon={Check}
               title="Sign in to view reviews"
               description="Use the Login button in the top-right corner."
             />
-          ) : loading ? (
-            <LoadingReviews />
           ) : reviews.length === 0 ? (
-            <EmptyState icon={Check} title="Nothing needs review" description="Suspicious scrape results will appear here." />
+            <EmptyState
+              title="Nothing needs review"
+              description="Failed or suspicious price checks will appear here."
+            />
           ) : (
             reviews.map((review) => (
               <ReviewCard
                 key={review.id}
                 review={review}
-                busy={busyId === review.id}
-                onAccept={() => postAction(review.id, "accept")}
-                onReject={(note) => postAction(review.id, "reject", { note })}
-                onManual={(payload) => postAction(review.id, "manual", payload)}
+                busy={
+                  busyId === review.id
+                }
+                onConfirm={() =>
+                  postAction(
+                    review.id,
+                    "confirm"
+                  )
+                }
+                onUseLast={(note) =>
+                  postAction(
+                    review.id,
+                    "use-last",
+                    { note }
+                  )
+                }
+                onManual={(payload) =>
+                  postAction(
+                    review.id,
+                    "manual",
+                    payload
+                  )
+                }
               />
             ))
           )}
@@ -138,191 +245,330 @@ export default function ReviewsPage() {
 function ReviewCard({
   review,
   busy,
-  onAccept,
-  onReject,
+  onConfirm,
+  onUseLast,
   onManual,
 }: {
   review: PendingReview;
   busy: boolean;
-  onAccept: () => Promise<void> | void;
-  onReject: (note: string | null) => Promise<void> | void;
-  onManual: (payload: { price: number; quantity: number; note: string | null }) => Promise<void> | void;
+  onConfirm: () =>
+    | Promise<void>
+    | void;
+  onUseLast: (
+    note: string | null
+  ) => Promise<void> | void;
+  onManual: (payload: {
+    price: number;
+    quantity: number;
+    note: string | null;
+  }) => Promise<void> | void;
 }) {
-  const [panel, setPanel] = useState<"reject" | "manual" | null>(null);
-  const [note, setNote] = useState("");
-  const [manualPrice, setManualPrice] = useState(review.scrapedPrice?.toString() ?? "");
-  const [manualQuantity, setManualQuantity] = useState(review.scrapedQuantity?.toString() ?? "1");
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [panel, setPanel] =
+    useState<
+      "last" | "manual" | null
+    >(null);
 
-  const currency = review.currency ?? "SEK";
-  const unit = review.unit ?? null;
+  const [note, setNote] =
+    useState("");
 
-  const currentDifference =
-    review.scrapedUnitPrice !== null && review.currentUnitPrice !== null && review.currentUnitPrice !== 0
-      ? ((review.scrapedUnitPrice - review.currentUnitPrice) / review.currentUnitPrice) * 100
-      : null;
+  const [
+    manualPrice,
+    setManualPrice,
+  ] = useState(
+    review.scrapedPrice?.toString() ??
+      ""
+  );
 
-  function togglePanel(next: "reject" | "manual") {
-    setValidationError(null);
-    setPanel((current) => (current === next ? null : next));
-  }
+  const [
+    manualQuantity,
+    setManualQuantity,
+  ] = useState(
+    (
+      review.scrapedQuantity ??
+      review.defaultQuantity
+    ).toString()
+  );
+
+  const [
+    validationError,
+    setValidationError,
+  ] = useState<string | null>(null);
 
   function submitManual() {
-    const price = Number(manualPrice);
-    const quantity = Number(manualQuantity);
+    const price =
+      Number(manualPrice);
 
-    if (!Number.isFinite(price) || price < 0) {
-      setValidationError("Manual price must be zero or greater.");
+    const quantity =
+      Number(manualQuantity);
+
+    if (
+      !Number.isFinite(price) ||
+      price < 0
+    ) {
+      setValidationError(
+        "Manual price must be zero or greater."
+      );
       return;
     }
 
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      setValidationError("Quantity must be greater than zero.");
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
+      setValidationError(
+        "Quantity must be greater than zero."
+      );
       return;
     }
 
     setValidationError(null);
-    void onManual({ price, quantity, note: note.trim() || null });
+
+    void onManual({
+      price,
+      quantity,
+      note:
+        note.trim() || null,
+    });
   }
 
+  const isSuspicious =
+    review.resultStatus ===
+    "Suspicious";
+
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <CardHeader className="pb-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
+          <div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{review.resultStatus}</Badge>
-              {review.store && <Badge variant="secondary">{review.store}</Badge>}
+              <Badge variant="outline">
+                {review.resultStatus}
+              </Badge>
+
+              <Badge variant="secondary">
+                {review.store}
+              </Badge>
             </div>
 
-            <CardTitle className="mt-3 text-lg leading-6">{review.itemName}</CardTitle>
-            <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(review.createdAt)}</p>
+            <CardTitle className="mt-3 text-lg">
+              {review.itemName}
+            </CardTitle>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              Observed{" "}
+              {formatDateTime(
+                review.observedAt
+              )}
+            </p>
           </div>
 
-          <Link href={`/items/${review.itemId}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          <Link
+            href={`/items/${review.itemId}`}
+            className={buttonVariants(
+              {
+                variant: "ghost",
+                size: "sm",
+              }
+            )}
+          >
             Product
-            <ExternalLink className="size-4" />
           </Link>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-5">
-        <div className="rounded-xl border bg-muted/20 p-4">
-          <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Scraped unit price</div>
-
-          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <div className="text-3xl font-semibold tracking-tight tabular-nums">
-              {formatUnitPrice(review.scrapedUnitPrice, currency, unit)}
-            </div>
-
-            {currentDifference !== null && (
-              <div className={currentDifference < 0 ? "text-sm font-medium text-success" : "text-sm font-medium text-warning"}>
-                {currentDifference > 0 ? "+" : ""}
-                {currentDifference.toFixed(1)}% vs current
-              </div>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <ReviewMetric
+            label="Scraped"
+            value={formatUnitPrice(
+              review.scrapedUnitPrice,
+              review.currency,
+              review.unit
             )}
-          </div>
+          />
+
+          <ReviewMetric
+            label="Last known"
+            value={formatUnitPrice(
+              review.lastKnownUnitPrice,
+              review.currency,
+              review.unit
+            )}
+          />
+
+          <ReviewMetric
+            label="Product current"
+            value={formatUnitPrice(
+              review.currentUnitPrice,
+              review.currency,
+              review.unit
+            )}
+          />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ReviewMetric label="Current accepted" value={formatUnitPrice(review.currentUnitPrice, currency, unit)} />
-          <ReviewMetric label="Target" value={formatUnitPrice(review.targetUnitPrice, currency, unit)} />
-        </div>
-
-        {(review.suspiciousReason || review.error) && (
-          <div className="rounded-lg border border-dashed p-3 text-sm">
-            <div className="font-medium">Why this needs review</div>
-            <div className="mt-1 text-muted-foreground">{review.suspiciousReason ?? review.error}</div>
+        <div className="rounded-lg border border-dashed p-3 text-sm">
+          <div className="font-medium">
+            Why this needs review
           </div>
-        )}
 
-        <Separator />
+          <div className="mt-1 text-muted-foreground">
+            {review.suspiciousReason ??
+              review.error ??
+              "PriceWatch could not determine a trustworthy new price."}
+          </div>
+        </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button type="button" disabled={busy} onClick={() => void onAccept()}>
-            <Check className="size-4" />
-            Accept scraped price
-          </Button>
+          {isSuspicious && (
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void onConfirm()
+              }
+            >
+              Confirm scraped price
+            </Button>
+          )}
 
-          <Button type="button" variant="outline" disabled={busy} onClick={() => togglePanel("manual")}>
-            <PencilLine className="size-4" />
-            Manual override
-          </Button>
+          {review.hasLastKnownPrice && (
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() =>
+                setPanel(
+                  panel === "last"
+                    ? null
+                    : "last"
+                )
+              }
+            >
+              Use last known price
+            </Button>
+          )}
 
-          <Button type="button" variant="ghost" disabled={busy} onClick={() => togglePanel("reject")}>
-            <X className="size-4" />
-            Reject
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() =>
+              setPanel(
+                panel === "manual"
+                  ? null
+                  : "manual"
+              )
+            }
+          >
+            Enter manual price
           </Button>
         </div>
 
-        {panel === "manual" && (
-          <div className="rounded-xl border bg-muted/15 p-4">
-            <div className="font-medium">Manual override</div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Use the correct package price and quantity for this single reviewed result.
-            </p>
+        {panel === "last" &&
+          review.hasLastKnownPrice && (
+            <div className="rounded-lg border bg-muted/15 p-4">
+              <Label>
+                Note (optional)
+              </Label>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Textarea
+                className="mt-2"
+                value={note}
+                onChange={(event) =>
+                  setNote(
+                    event.target.value
+                  )
+                }
+              />
+
+              <Button
+                className="mt-3"
+                disabled={busy}
+                onClick={() =>
+                  void onUseLast(
+                    note.trim() ||
+                      null
+                  )
+                }
+              >
+                Keep last known price
+              </Button>
+            </div>
+          )}
+
+        {panel === "manual" && (
+          <div className="rounded-lg border bg-muted/15 p-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Price</Label>
-                <Input type="number" min="0" step="0.01" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} />
+                <Label>
+                  Price
+                </Label>
+
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    manualPrice
+                  }
+                  onChange={(event) =>
+                    setManualPrice(
+                      event.target.value
+                    )
+                  }
+                />
               </div>
 
               <div className="space-y-2">
-                <Label>Quantity</Label>
+                <Label>
+                  Quantity
+                </Label>
+
                 <Input
                   type="number"
                   min="0.000001"
                   step="any"
-                  value={manualQuantity}
-                  onChange={(event) => setManualQuantity(event.target.value)}
+                  value={
+                    manualQuantity
+                  }
+                  onChange={(event) =>
+                    setManualQuantity(
+                      event.target.value
+                    )
+                  }
                 />
               </div>
 
               <div className="space-y-2 sm:col-span-2">
-                <Label>Note</Label>
-                <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional review note" />
+                <Label>
+                  Note (optional)
+                </Label>
+
+                <Textarea
+                  value={note}
+                  onChange={(event) =>
+                    setNote(
+                      event.target.value
+                    )
+                  }
+                />
               </div>
             </div>
 
-            {validationError && <p className="mt-3 text-sm text-destructive">{validationError}</p>}
+            {validationError && (
+              <p className="mt-3 text-sm text-destructive">
+                {
+                  validationError
+                }
+              </p>
+            )}
 
-            <div className="mt-4 flex gap-2">
-              <Button type="button" disabled={busy} onClick={submitManual}>
-                Save override
-              </Button>
-              <Button type="button" variant="ghost" disabled={busy} onClick={() => setPanel(null)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {panel === "reject" && (
-          <div className="rounded-xl border bg-muted/15 p-4">
-            <div className="font-medium">Reject result</div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Rejecting keeps the current accepted product price unchanged.
-            </p>
-
-            <div className="mt-4 space-y-2">
-              <Label>Note</Label>
-              <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional reason" />
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={busy}
-                onClick={() => void onReject(note.trim() || null)}
-              >
-                Reject result
-              </Button>
-              <Button type="button" variant="ghost" disabled={busy} onClick={() => setPanel(null)}>
-                Cancel
-              </Button>
-            </div>
+            <Button
+              className="mt-3"
+              disabled={busy}
+              onClick={
+                submitManual
+              }
+            >
+              Save manual observation
+            </Button>
           </div>
         )}
       </CardContent>
@@ -330,15 +576,30 @@ function ReviewCard({
   );
 }
 
-function ReviewMetric({ label, value }: { label: string; value: string }) {
+function ReviewMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="rounded-lg border p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 font-medium tabular-nums">{value}</div>
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="text-xs text-muted-foreground">
+        {label}
+      </div>
+
+      <div className="mt-1 font-medium tabular-nums">
+        {value}
+      </div>
     </div>
   );
 }
 
 function LoadingReviews() {
-  return <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">Loading reviews…</div>;
+  return (
+    <div className="rounded-lg border border-dashed p-8 text-sm text-muted-foreground">
+      Loading reviews…
+    </div>
+  );
 }

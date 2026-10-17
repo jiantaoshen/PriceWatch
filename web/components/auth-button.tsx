@@ -1,6 +1,5 @@
 "use client";
 
-import { LogIn, LogOut } from "lucide-react";
 import { Button } from "@pricewatch/ui/button";
 import { useAuth } from "@/components/auth-provider";
 
@@ -32,7 +31,6 @@ export function AuthButton() {
           signIn().catch(console.error);
         }}
       >
-        <LogIn className="size-4" />
         Login
       </Button>
     );
@@ -46,7 +44,6 @@ export function AuthButton() {
         signOut().catch(console.error);
       }}
     >
-      <LogOut className="size-4" />
       Logout
     </Button>
   );

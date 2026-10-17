@@ -6,18 +6,18 @@ public enum ItemType
     Subscription
 }
 
-public enum UpdateMode
-{
-    Manual,
-    Automatic,
-    Hybrid
-}
-
 public enum PriceOrigin
 {
     Scrape,
+    Manual
+}
+
+public enum BestPriceChangeCause
+{
+    Automatic,
     Manual,
-    ManualOverride
+    Review,
+    SourceChange
 }
 
 public enum ScrapeRunStatus
@@ -25,7 +25,8 @@ public enum ScrapeRunStatus
     Running,
     Success,
     Partial,
-    Failed
+    Failed,
+    Abandoned
 }
 
 public enum ScrapeResultStatus

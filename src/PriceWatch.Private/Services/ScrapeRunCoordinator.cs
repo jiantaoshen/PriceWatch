@@ -1,3 +1,5 @@
+using PriceWatch.Private.Models;
+
 namespace PriceWatch.Private.Services;
 
 public sealed record CoordinatorStatus(
@@ -6,11 +8,19 @@ public sealed record CoordinatorStatus(
     DateTimeOffset? StartedAt,
     string? LastError);
 
+public enum ScrapeStartResult
+{
+    Started,
+    AlreadyRunning
+}
+
 public sealed class ScrapeRunCoordinator
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly PostgreSqlScrapeLock _globalLock;
     private readonly ILogger<ScrapeRunCoordinator> _logger;
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _startGate = new(1, 1);
 
     private Task? _runningTask;
     private Guid? _currentRunId;
@@ -19,9 +29,11 @@ public sealed class ScrapeRunCoordinator
 
     public ScrapeRunCoordinator(
         IServiceScopeFactory scopeFactory,
+        PostgreSqlScrapeLock globalLock,
         ILogger<ScrapeRunCoordinator> logger)
     {
         _scopeFactory = scopeFactory;
+        _globalLock = globalLock;
         _logger = logger;
     }
 
@@ -37,46 +49,87 @@ public sealed class ScrapeRunCoordinator
         }
     }
 
-    public bool TryStart()
+    public async Task<ScrapeStartResult> TryStartAsync(
+        CancellationToken cancellationToken = default)
     {
-        lock (_gate)
+        await _startGate.WaitAsync(cancellationToken);
+
+        try
         {
-            if (_runningTask is { IsCompleted: false })
+            lock (_gate)
             {
-                return false;
+                if (_runningTask is { IsCompleted: false })
+                {
+                    return ScrapeStartResult.AlreadyRunning;
+                }
             }
 
-            _startedAt = DateTimeOffset.UtcNow;
-            _currentRunId = null;
-            _lastError = null;
+            // Acquire the database-backed lock before acknowledging the API
+            // request. This catches runs started by Task Scheduler, another
+            // process, or a future second worker as well as this process.
+            var globalLock = await _globalLock.TryAcquireAsync(
+                cancellationToken);
 
-            _runningTask = Task.Run(RunAsync);
-            return true;
+            if (globalLock is null)
+            {
+                return ScrapeStartResult.AlreadyRunning;
+            }
+
+            lock (_gate)
+            {
+                _startedAt = DateTimeOffset.UtcNow;
+                _currentRunId = null;
+                _lastError = null;
+
+                _runningTask = Task.Run(() => RunAsync(globalLock));
+            }
+
+            return ScrapeStartResult.Started;
+        }
+        finally
+        {
+            _startGate.Release();
         }
     }
 
-    private async Task RunAsync()
+    private async Task RunAsync(
+        PostgreSqlScrapeLockHandle globalLock)
     {
-        try
+        await using (globalLock)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var orchestrator = scope.ServiceProvider
-                .GetRequiredService<ScrapeOrchestrator>();
-
-            var runId = await orchestrator.RunOnceAsync();
-
-            lock (_gate)
+            try
             {
-                _currentRunId = runId;
+                using var scope = _scopeFactory.CreateScope();
+                var recovery = scope.ServiceProvider
+                    .GetRequiredService<ScrapeRunRecoveryService>();
+                var orchestrator = scope.ServiceProvider
+                    .GetRequiredService<ScrapeOrchestrator>();
+
+                await recovery.RecoverAbandonedRunsAsync(
+                    DateTimeOffset.UtcNow);
+
+                var runId = await orchestrator.RunOnceAsync(ScrapeTrigger.OnDemand);
+
+                lock (_gate)
+                {
+                    _currentRunId = runId;
+                }
             }
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError(exception, "Private scrape run failed.");
-
-            lock (_gate)
+            catch (Exception exception)
             {
-                _lastError = exception.Message;
+                var errorId = Guid.NewGuid();
+
+                _logger.LogError(
+                    "Private scrape run failed. ErrorId={ErrorId}, Type={ExceptionType}, StackTrace={StackTrace}",
+                    errorId,
+                    exception.GetType().FullName,
+                    exception.StackTrace);
+
+                lock (_gate)
+                {
+                    _lastError =
+                        $"Scrape run failed. Error ID: {errorId}";
+                }
             }
         }
     }

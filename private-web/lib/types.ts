@@ -1,6 +1,11 @@
 export type RunSummary = {
   id: string;
-  status: "running" | "success" | "partial" | "failed";
+  status:
+    | "running"
+    | "success"
+    | "partial"
+    | "failed"
+    | "abandoned";
   startedAt: string;
   finishedAt: string | null;
   totalItems: number;
@@ -19,8 +24,7 @@ export type CoordinatorStatus = {
 export type DashboardData = {
   coordinator: CoordinatorStatus;
   activeItems: number;
-  automaticSources: number;
-  manualSources: number;
+  scrapingSources: number;
   pendingReviews: number;
   lastRun: RunSummary | null;
 };
@@ -34,31 +38,38 @@ export type PrivateItem = {
   targetUnitPrice: number | null;
   currentUnitPrice: number | null;
   previousUnitPrice: number | null;
-  currentStore: string | null;
+  currentStores: string[];
   sourceCount: number;
-  automaticSourceCount: number;
-  manualSourceCount: number;
-  updateMode: "manual" | "automatic" | "hybrid";
+  hasScrapingSources: boolean;
+  checkIntervalMinutes: number | null;
   trackingEnabled: boolean;
   lastCheckedAt: string | null;
   lastPriceChangedAt: string | null;
   archivedAt: string | null;
-  belowTarget: boolean;
 };
 
 export type RunResult = {
   id: number;
   itemId: string;
   itemName: string;
-  sourceId: number | null;
-  store: string | null;
-  resultStatus: "success" | "suspicious" | "failed";
-  reviewStatus: "notRequired" | "pending" | "accepted" | "rejected" | "manualOverride";
+  sourceId: number;
+  store: string;
+  resultStatus:
+    | "success"
+    | "suspicious"
+    | "failed";
+  reviewStatus:
+    | "notRequired"
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "manualOverride";
   scrapedPrice: number | null;
   scrapedQuantity: number | null;
   scrapedUnitPrice: number | null;
   suspiciousReason: string | null;
   error: string | null;
+  observedAt: string;
   createdAt: string;
   reviewedAt: string | null;
 };

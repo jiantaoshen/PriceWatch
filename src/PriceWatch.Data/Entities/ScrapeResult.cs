@@ -12,12 +12,9 @@ public class ScrapeResult
 
     public TrackedItem Item { get; set; } = null!;
 
-    public long? SourceId { get; set; }
+    public long SourceId { get; set; }
 
-    public ItemSource? Source { get; set; }
-
-
-    // Python / scraper result
+    public ItemSource Source { get; set; } = null!;
 
     public decimal? ScrapedPrice { get; set; }
 
@@ -31,21 +28,13 @@ public class ScrapeResult
 
     public string? SuspiciousReason { get; set; }
 
-
-    // User review
-
     public ReviewStatus ReviewStatus { get; set; }
-
-    public decimal? ManualPrice { get; set; }
-
-    public decimal? ManualQuantity { get; set; }
-
-    public decimal? ManualUnitPrice { get; private set; }
 
     public string? ReviewNote { get; set; }
 
     public DateTimeOffset? ReviewedAt { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; }
-        = DateTimeOffset.UtcNow;
+    public DateTimeOffset ObservedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

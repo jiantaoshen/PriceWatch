@@ -4,9 +4,7 @@ import {
   request,
 } from "@pricewatch/api/core";
 
-const apiUrl =
-  process.env.NEXT_PUBLIC_PRIVATE_API_URL ??
-  "http://127.0.0.1:5188";
+const CLIENT_HEADER = "X-PriceWatch-Client";
 
 export {
   ApiError,
@@ -17,9 +15,15 @@ export async function apiFetch<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set(CLIENT_HEADER, "private-web");
+
   return request<T>({
-    baseUrl: apiUrl,
+    baseUrl: "",
     path,
-    init,
+    init: {
+      ...init,
+      headers,
+    },
   });
 }

@@ -5,5 +5,8 @@
     <Project Path="src/PriceWatch.Private/PriceWatch.Private.csproj" />
     <Project Path="src/PriceWatch.WebApi/PriceWatch.WebApi.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PriceWatch.Tests/PriceWatch.Tests.csproj" />
+  </Folder>
   <Folder Name="/tools/" />
 </Solution>

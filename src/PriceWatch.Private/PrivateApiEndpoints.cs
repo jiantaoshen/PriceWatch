@@ -26,24 +26,7 @@ public static class PrivateApiEndpoints
         group.MapGet("/runs/{id:guid}/results", RunResultsAsync);
         group.MapGet("/status", StatusAsync);
 
-        group.MapPost("/run", (
-            ScrapeRunCoordinator coordinator) =>
-        {
-            if (!coordinator.TryStart())
-            {
-                return Results.Conflict(new
-                {
-                    error = "A PriceWatch run is already in progress."
-                });
-            }
-
-            return Results.Accepted(
-                "/api/private/status",
-                new
-                {
-                    status = "started"
-                });
-        });
+        group.MapPost("/run", StartRunAsync);
 
         group.MapGet("/schedule", async (
             WindowsScheduleService schedule) =>
@@ -58,17 +41,17 @@ public static class PrivateApiEndpoints
                 return Results.Ok(
                     await schedule.ApplyAsync(request));
             }
-            catch (ArgumentException exception)
+            catch (ArgumentException)
             {
                 return Results.BadRequest(new
                 {
-                    error = exception.Message
+                    error = "Invalid schedule configuration."
                 });
             }
-            catch (PlatformNotSupportedException exception)
+            catch (PlatformNotSupportedException)
             {
                 return Results.Problem(
-                    detail: exception.Message,
+                    detail: "Windows Task Scheduler is only supported on Windows.",
                     statusCode: StatusCodes.Status501NotImplemented);
             }
         });
@@ -83,6 +66,29 @@ public static class PrivateApiEndpoints
         return endpoints;
     }
 
+    private static async Task<IResult> StartRunAsync(
+        ScrapeRunCoordinator coordinator,
+        CancellationToken ct)
+    {
+        var result = await coordinator.TryStartAsync(ct);
+
+        if (result == ScrapeStartResult.AlreadyRunning)
+        {
+            return Results.Conflict(new
+            {
+                error = "A PriceWatch run is already in progress.",
+                reason = "already_running"
+            });
+        }
+
+        return Results.Accepted(
+            "/api/private/status",
+            new
+            {
+                status = "started"
+            });
+    }
+
     private static async Task<IResult> DashboardAsync(
         PriceWatchDbContext db,
         ScrapeRunCoordinator coordinator,
@@ -95,21 +101,13 @@ public static class PrivateApiEndpoints
                 x.TrackingEnabled,
                 ct);
 
-        var automaticSources = await db.ItemSources
+        var scrapingSources = await db.ItemSources
             .AsNoTracking()
             .CountAsync(x =>
                 x.Item.ArchivedAt == null &&
                 x.Item.TrackingEnabled &&
+                x.ArchivedAt == null &&
                 x.ScrapingEnabled,
-                ct);
-
-        var manualSources = await db.ItemSources
-            .AsNoTracking()
-            .CountAsync(x =>
-                x.Item.ArchivedAt == null &&
-                x.Item.TrackingEnabled &&
-                !x.ScrapingEnabled &&
-                x.ManualPrice != null,
                 ct);
 
         var pendingReviews = await db.ScrapeResults
@@ -138,8 +136,7 @@ public static class PrivateApiEndpoints
         {
             coordinator = coordinator.GetStatus(),
             activeItems,
-            automaticSources,
-            manualSources,
+            scrapingSources,
             pendingReviews,
             lastRun
         });
@@ -152,46 +149,61 @@ public static class PrivateApiEndpoints
     {
         var query = db.TrackedItems
             .AsNoTracking()
+            .Include(x => x.Sources)
             .AsQueryable();
 
         if (!includeArchived)
-        {
             query = query.Where(x => x.ArchivedAt == null);
-        }
 
         var items = await query
             .OrderBy(x => x.Name)
-            .Select(x => new
-            {
-                x.Id,
-                x.ItemType,
-                x.Name,
-                x.Currency,
-                x.Unit,
-                x.TargetUnitPrice,
-                x.CurrentUnitPrice,
-                x.PreviousUnitPrice,
-                CurrentStore = x.CurrentSource != null
-                    ? x.CurrentSource.Store
-                    : null,
-                SourceCount = x.Sources.Count,
-                AutomaticSourceCount = x.Sources.Count(s => s.ScrapingEnabled),
-                ManualSourceCount = x.Sources.Count(s =>
-                    !s.ScrapingEnabled &&
-                    s.ManualPrice != null),
-                x.UpdateMode,
-                x.TrackingEnabled,
-                x.LastCheckedAt,
-                x.LastPriceChangedAt,
-                x.ArchivedAt,
-                BelowTarget =
-                    x.TargetUnitPrice != null &&
-                    x.CurrentUnitPrice != null &&
-                    x.CurrentUnitPrice <= x.TargetUnitPrice
-            })
             .ToListAsync(ct);
 
-        return Results.Ok(items);
+        var itemIds = items.Select(x => x.Id).ToArray();
+        var states = await db.BestPriceStates
+            .AsNoTracking()
+            .Include(x => x.Sources)
+                .ThenInclude(x => x.Source)
+            .Where(x => itemIds.Contains(x.ItemId))
+            .OrderByDescending(x => x.RecordedAt)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
+
+        var latestStateByItem = states
+            .GroupBy(x => x.ItemId)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        return Results.Ok(items.Select(item =>
+        {
+            latestStateByItem.TryGetValue(item.Id, out var state);
+            var activeSources = item.Sources.Where(x => x.ArchivedAt == null).ToList();
+
+            return new
+            {
+                item.Id,
+                item.ItemType,
+                item.Name,
+                item.Currency,
+                item.Unit,
+                item.TargetUnitPrice,
+                item.CurrentUnitPrice,
+                item.PreviousUnitPrice,
+                CurrentStores = item.CurrentUnitPrice.HasValue
+                    ? state?.Sources
+                        .Where(x => x.Source.ArchivedAt == null)
+                        .Select(x => x.Source.Store)
+                        .OrderBy(x => x)
+                        .ToArray() ?? []
+                    : [],
+                SourceCount = activeSources.Count,
+                HasScrapingSources = activeSources.Any(x => x.ScrapingEnabled),
+                item.CheckIntervalMinutes,
+                item.TrackingEnabled,
+                item.LastCheckedAt,
+                item.LastPriceChangedAt,
+                item.ArchivedAt
+            };
+        }));
     }
 
     private static async Task<IResult> RunsAsync(
@@ -246,7 +258,7 @@ public static class PrivateApiEndpoints
                 x.ItemId,
                 ItemName = x.Item.Name,
                 x.SourceId,
-                Store = x.Source != null ? x.Source.Store : null,
+                Store = x.Source.Store,
                 x.ResultStatus,
                 x.ReviewStatus,
                 x.ScrapedPrice,
@@ -254,6 +266,7 @@ public static class PrivateApiEndpoints
                 x.ScrapedUnitPrice,
                 x.SuspiciousReason,
                 x.Error,
+                x.ObservedAt,
                 x.CreatedAt,
                 x.ReviewedAt
             })

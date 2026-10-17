@@ -61,13 +61,60 @@ export async function request<T>({
     );
 
   if (!response.ok) {
-    const text =
-      await response.text();
+    const fallback =
+      `${response.status} ${response.statusText}`;
+
+    // Never surface raw 5xx response bodies. A backend failure can contain
+    // provider exceptions, stack traces, connection strings, or credentials.
+    if (response.status >= 500) {
+      let traceId: string | undefined;
+
+      try {
+        const problem =
+          (await response.json()) as {
+            traceId?: unknown;
+          };
+
+        if (typeof problem.traceId === "string") {
+          traceId = problem.traceId;
+        }
+      } catch {
+        // Intentionally ignore malformed/non-JSON error bodies.
+      }
+
+      throw new ApiError(
+        response.status,
+        traceId
+          ? `Internal server error (${traceId})`
+          : "Internal server error"
+      );
+    }
+
+    let message = fallback;
+
+    try {
+      const problem =
+        (await response.json()) as {
+          detail?: unknown;
+          title?: unknown;
+          error?: unknown;
+        };
+
+      if (typeof problem.detail === "string") {
+        message = problem.detail;
+      } else if (typeof problem.error === "string") {
+        message = problem.error;
+      } else if (typeof problem.title === "string") {
+        message = problem.title;
+      }
+    } catch {
+      // Non-5xx responses may still be plain text. Keep the generic status
+      // rather than echoing an arbitrary response body into the UI.
+    }
 
     throw new ApiError(
       response.status,
-      text ||
-        `${response.status} ${response.statusText}`
+      message
     );
   }
 

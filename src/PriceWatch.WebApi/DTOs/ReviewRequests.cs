@@ -1,6 +1,6 @@
 namespace PriceWatch.WebApi.DTOs;
 
-public sealed class RejectReviewRequest
+public sealed class UseLastReviewRequest
 {
     public string? Note { get; init; }
 }

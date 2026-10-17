@@ -50,7 +50,7 @@ export function matchesItemSearch(
 
   return (
     item.name.toLowerCase().includes(query) ||
-    item.currentStore?.toLowerCase().includes(query) === true
+    item.currentStores.some((store) => store.toLowerCase().includes(query))
   );
 }
 
