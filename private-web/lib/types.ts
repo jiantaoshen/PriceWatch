@@ -1,6 +1,11 @@
 export type RunSummary = {
   id: string;
-  status: "running" | "success" | "partial" | "failed" | "abandoned";
+  status:
+    | "running"
+    | "success"
+    | "partial"
+    | "failed"
+    | "abandoned";
   startedAt: string;
   finishedAt: string | null;
   totalItems: number;
@@ -9,11 +14,15 @@ export type RunSummary = {
   failed: number;
 };
 
+export type CoordinatorStatus = {
+  running: boolean;
+  currentRunId: string | null;
+  startedAt: string | null;
+  lastError: string | null;
+};
+
 export type DashboardData = {
-  coordinator: {
-    isRunning: boolean;
-    startedAt: string | null;
-  };
+  coordinator: CoordinatorStatus;
   activeItems: number;
   scrapingSources: number;
   pendingReviews: number;
@@ -45,8 +54,16 @@ export type RunResult = {
   itemName: string;
   sourceId: number;
   store: string;
-  resultStatus: "success" | "suspicious" | "failed";
-  reviewStatus: "notRequired" | "pending" | "accepted" | "rejected" | "manualOverride";
+  resultStatus:
+    | "success"
+    | "suspicious"
+    | "failed";
+  reviewStatus:
+    | "notRequired"
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "manualOverride";
   scrapedPrice: number | null;
   scrapedQuantity: number | null;
   scrapedUnitPrice: number | null;
@@ -57,12 +74,10 @@ export type RunResult = {
   reviewedAt: string | null;
 };
 
-export type ScheduleData = {
-  exists: boolean;
+export type ScheduleStatus = {
+  taskExists: boolean;
   enabled: boolean;
-  dayOfWeek: number;
+  day: string;
   time: string;
-  nextRunTime: string | null;
-  lastRunTime: string | null;
-  lastTaskResult: number | null;
+  runIfMissed: boolean;
 };
