@@ -42,16 +42,21 @@ public sealed class PriceAlertEmailSender
                     .ThenInclude(x => x.Source)
             .Where(x =>
                 (x.Status == AlertStatus.Pending || x.Status == AlertStatus.Failed) &&
-                x.BestPriceState.Cause == BestPriceChangeCause.Automatic &&
-                x.UnitPrice <= x.TargetUnitPrice)
+                x.BestPriceState.Cause == BestPriceChangeCause.Automatic)
             .OrderBy(x => x.CreatedAt)
             .ThenBy(x => x.Id)
-            .Take(BatchSize)
             .ToListAsync(ct);
+
+        // NUMERIC values in the verified staging file use exact TEXT storage.
+        // Decimal comparison must happen in .NET, not lexicographic SQLite SQL.
+        var eligibleAlerts = alerts
+            .Where(x => x.UnitPrice <= x.TargetUnitPrice)
+            .Take(BatchSize)
+            .ToList();
 
         var sent = 0;
 
-        foreach (var alert in alerts)
+        foreach (var alert in eligibleAlerts)
         {
             ct.ThrowIfCancellationRequested();
 

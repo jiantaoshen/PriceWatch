@@ -1,4 +1,6 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PriceWatch.Data.Entities;
 
 namespace PriceWatch.Data;
@@ -21,6 +23,7 @@ public class PriceWatchDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var sqlite = Database.IsSqlite();
         modelBuilder.Entity<TrackedItem>(entity =>
         {
             entity.ToTable("tracked_items", table =>
@@ -71,9 +74,8 @@ public class PriceWatchDbContext : DbContext
             entity.Property(x => x.ComparisonQuantity)
                 .HasPrecision(18, 4);
 
-            entity.Property(x => x.TargetUnitPrice)
-                .HasPrecision(18, 6)
-                .HasComputedColumnSql(
+            entity.Property(x => x.TargetUnitPrice).HasPrecision(18, 6);
+            if (!sqlite) entity.Property(x => x.TargetUnitPrice).HasComputedColumnSql(
                     """
                     CASE
                         WHEN target_price IS NULL
@@ -88,14 +90,16 @@ public class PriceWatchDbContext : DbContext
                 entity.Property(x => x.CurrentQuantity),
                 entity.Property(x => x.CurrentUnitPrice),
                 "current_price",
-                "current_quantity");
+                "current_quantity",
+                sqlite);
 
             ConfigureComputedPrice(
                 entity.Property(x => x.PreviousPrice),
                 entity.Property(x => x.PreviousQuantity),
                 entity.Property(x => x.PreviousUnitPrice),
                 "previous_price",
-                "previous_quantity");
+                "previous_quantity",
+                sqlite);
 
             entity.HasMany(x => x.Sources)
                 .WithOne(x => x.Item)
@@ -159,8 +163,8 @@ public class PriceWatchDbContext : DbContext
             entity.Property(x => x.Quantity)
                 .HasPrecision(18, 4);
 
-            entity.Property(x => x.UnitPrice)
-                .HasPrecision(18, 6)
+            entity.Property(x => x.UnitPrice).HasPrecision(18, 6);
+            if (!sqlite) entity.Property(x => x.UnitPrice)
                 .HasComputedColumnSql("price / quantity", stored: true);
 
             entity.Property(x => x.Origin)
@@ -277,9 +281,8 @@ public class PriceWatchDbContext : DbContext
             entity.Property(x => x.ScrapedQuantity)
                 .HasPrecision(18, 4);
 
-            entity.Property(x => x.ScrapedUnitPrice)
-                .HasPrecision(18, 6)
-                .HasComputedColumnSql(
+            entity.Property(x => x.ScrapedUnitPrice).HasPrecision(18, 6);
+            if (!sqlite) entity.Property(x => x.ScrapedUnitPrice).HasComputedColumnSql(
                     """
                     CASE
                         WHEN scraped_price IS NULL
@@ -345,6 +348,86 @@ public class PriceWatchDbContext : DbContext
             entity.HasIndex(x => x.BestPriceStateId)
                 .IsUnique();
         });
+
+        if (sqlite)
+        {
+            // The verified PostgreSQL export stores UUIDs, UTC timestamps and
+            // NUMERIC fields as canonical TEXT. Match those existing bytes.
+            // Do not call EnsureCreated/Migrate against the imported database.
+            var guidConverter = new ValueConverter<Guid, string>(
+                value => value.ToString("D").ToLowerInvariant(),
+                value => Guid.Parse(value));
+            var dateConverter = new ValueConverter<DateTimeOffset, string>(
+                value => value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.ffffffzzz", CultureInfo.InvariantCulture),
+                value => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+            var moneyConverter = new ValueConverter<decimal, string>(
+                value => value.ToString(CultureInfo.InvariantCulture),
+                value => decimal.Parse(value, CultureInfo.InvariantCulture));
+
+            foreach (var entity in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entity.GetProperties())
+                {
+                    var type = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
+                    if (type == typeof(Guid)) property.SetValueConverter(guidConverter);
+                    if (type == typeof(DateTimeOffset)) property.SetValueConverter(dateConverter);
+                    if (type == typeof(decimal)) property.SetValueConverter(moneyConverter);
+                }
+            }
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        PopulateSqliteUnitPrices();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        PopulateSqliteUnitPrices();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void PopulateSqliteUnitPrices()
+    {
+        if (!Database.IsSqlite()) return;
+        ChangeTracker.DetectChanges();
+        // The staging export intentionally has ordinary TEXT columns, not
+        // SQLite generated columns. Keep the 6-place price calculations in .NET.
+        foreach (var entry in ChangeTracker.Entries<TrackedItem>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified))
+        {
+            var item = entry.Entity;
+            entry.Property(x => x.TargetUnitPrice).CurrentValue =
+                Divide(item.TargetPrice, item.ComparisonQuantity);
+            entry.Property(x => x.CurrentUnitPrice).CurrentValue =
+                Divide(item.CurrentPrice, item.CurrentQuantity);
+            entry.Property(x => x.PreviousUnitPrice).CurrentValue =
+                Divide(item.PreviousPrice, item.PreviousQuantity);
+        }
+        foreach (var entry in ChangeTracker.Entries<PriceObservation>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified))
+        {
+            entry.Property(x => x.UnitPrice).CurrentValue =
+                Divide(entry.Entity.Price, entry.Entity.Quantity)
+                ?? throw new InvalidOperationException("Observation requires positive quantity.");
+        }
+        foreach (var entry in ChangeTracker.Entries<ScrapeResult>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified))
+        {
+            entry.Property(x => x.ScrapedUnitPrice).CurrentValue =
+                Divide(entry.Entity.ScrapedPrice, entry.Entity.ScrapedQuantity);
+        }
+    }
+
+    private static decimal? Divide(decimal? price, decimal? quantity)
+    {
+        if (price is null || quantity is null) return null;
+        if (quantity <= 0) throw new InvalidOperationException("Quantity must be positive.");
+        return Math.Round(price.Value / quantity.Value, 6, MidpointRounding.AwayFromZero);
     }
 
     private static void ConfigureComputedPrice(
@@ -352,13 +435,13 @@ public class PriceWatchDbContext : DbContext
         Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder<decimal?> quantity,
         Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder<decimal?> unitPrice,
         string priceColumn,
-        string quantityColumn)
+        string quantityColumn,
+        bool sqlite)
     {
         price.HasPrecision(18, 4);
         quantity.HasPrecision(18, 4);
-        unitPrice
-            .HasPrecision(18, 6)
-            .HasComputedColumnSql(
+        unitPrice.HasPrecision(18, 6);
+        if (!sqlite) unitPrice.HasComputedColumnSql(
                 $"CASE WHEN {priceColumn} IS NULL OR {quantityColumn} IS NULL THEN NULL ELSE {priceColumn} / {quantityColumn} END",
                 stored: true);
     }

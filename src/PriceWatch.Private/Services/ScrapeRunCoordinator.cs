@@ -17,7 +17,7 @@ public enum ScrapeStartResult
 public sealed class ScrapeRunCoordinator
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly PostgreSqlScrapeLock _globalLock;
+    private readonly SqliteScrapeLock _globalLock;
     private readonly ILogger<ScrapeRunCoordinator> _logger;
     private readonly object _gate = new();
     private readonly SemaphoreSlim _startGate = new(1, 1);
@@ -29,7 +29,7 @@ public sealed class ScrapeRunCoordinator
 
     public ScrapeRunCoordinator(
         IServiceScopeFactory scopeFactory,
-        PostgreSqlScrapeLock globalLock,
+        SqliteScrapeLock globalLock,
         ILogger<ScrapeRunCoordinator> logger)
     {
         _scopeFactory = scopeFactory;
@@ -64,7 +64,7 @@ public sealed class ScrapeRunCoordinator
                 }
             }
 
-            // Acquire the database-backed lock before acknowledging the API
+            // Acquire the cross-process file lock before acknowledging the API
             // request. This catches runs started by Task Scheduler, another
             // process, or a future second worker as well as this process.
             var globalLock = await _globalLock.TryAcquireAsync(
@@ -93,7 +93,7 @@ public sealed class ScrapeRunCoordinator
     }
 
     private async Task RunAsync(
-        PostgreSqlScrapeLockHandle globalLock)
+        SqliteScrapeLockHandle globalLock)
     {
         await using (globalLock)
         {
