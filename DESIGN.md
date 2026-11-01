@@ -1,6 +1,12 @@
-# DESIGN.md
+# PriceWatch System Design — Local-first v1
 
-# PriceWatch System Design
+> **Design decision (2026-11-01):** PriceWatch is a **single-user, Windows-local** price tracker. The target architecture is one local Next.js web application, one SQLite data file, an independent existing Python/Playwright scraper orchestrated by a lightweight .NET process, and **Windows Task Scheduler**. Neon/PostgreSQL, public hosting, the two-web-app split and cloud login are retired **only after** a verified migration.
+>
+> **Implementation status:** This document specifies the target design. The uploaded repository snapshot still uses PostgreSQL/Npgsql, separate `web`/`private-web` applications and two ASP.NET APIs. Phase 1 delivers a **read-only PostgreSQL → SQLite staging-data copy**, not an application switch-over. Do not point the existing .NET services at the staging DB yet.
+>
+> **Explicit constraints:** SQLite is the only eventual source of truth; **do not rewrite the scraper**; do not add a per-domain allowlist; keep the existing network safety checks; do not enable SQLite WAL as part of the initial migration; preserve the Windows scheduled task and the scraper's independent execution.
+
+---
 
 ## 1. Product Goal
 
@@ -403,73 +409,36 @@ The Private Email tab also supports sending a test message without creating a pr
 
 ---
 
-# 4. Non-Functional Requirements
+# 4. Non-Functional Requirements — Local-first
 
-## 4.1 Security
+## 4.1 Local security boundary
 
-The system shall:
+- Bind the sole web application to **127.0.0.1** by default. Local-only does not automatically mean trustworthy: mutating browser endpoints must validate request origin/CSRF and never expose an arbitrary OS command runner.
+- The browser never receives database credentials, raw file access, or scraper subprocess control. Only Next.js **server-side** code can access the SQLite file.
+- Products and scrape URLs are **entered by the owner**. No separate website/domain allowlist is required. The existing scraper network guard remains in place to block non-public/loopback/internal destinations and invalid protocols at request time, including redirects and subresources; this is a network safety boundary, not a domain allowlist.
+- Keep the Playwright worker a separate, low-privilege local process. Do not inject scraped page data into shell commands; treat scraped values as untrusted.
+- Do not log passwords, API tokens, email credentials, or raw database connection strings. Keep the SQLite data file and backups out of Git; use appropriate Windows file permissions.
 
-- sanitize HTTP errors,
-- never expose passwords, tokens, connection strings, stack traces, or raw secret-bearing stderr,
-- keep private API credentials server-side,
-- preserve authentication/authorization boundaries,
-- enforce SSRF protection at execution time,
-- fail closed on unsafe network targets.
+## 4.2 Runtime separation
 
----
+- **UI (on demand):** a single Next.js application exposes viewing and local management, including former `private-web` features, on `http://127.0.0.1:3000`.
+- **Scraper (scheduled independently):** Windows Task Scheduler runs the existing .NET orchestrator + Python/Playwright worker; the task writes to the same local SQLite file and exits without requiring Next.js to run.
+- **No always-on Web API:** after the application migration, Next.js server-side Route Handlers / Server Actions handle local CRUD and reads. Retain only the .NET logic needed by the scraper; do not duplicate the price rules in JavaScript without tests.
+- **No public cloud access:** Neon, Vercel, Cloud Run and Microsoft cloud login are removed only after an explicit cutover and verification.
 
-## 4.2 Private API Boundary
+## 4.3 Concurrency, reliability and scheduling
 
-`PriceWatch.Private`:
+- Retain Windows Task Scheduler as the sole scheduled trigger. Configure it **not to start another instance** while a scrape is active.
+- Ensure only one scrape writes at a time, including if a manual run is offered later. Replace the PostgreSQL session-level advisory lock with a local-process/file or OS lock before cutover; SQLite's write lock is **not** a substitute for scrape-run coordination.
+- Keep transactions short and handle `SQLITE_BUSY` with a bounded timeout or retry. Begin with SQLite's **default rollback journal**; do not enable WAL in v1. Revisit WAL only after actual use suggests contention.
+- Preserve recovery for interrupted `Running` runs, validation, Reviews, best-price calculations and notification delivery semantics.
+- Back up SQLite consistently, retain the Neon source in read-only mode during validation, and have a rollback path.
 
-- binds only to loopback,
-- requires `X-PriceWatch-Token`,
-- rejects unauthenticated direct access.
+## 4.4 Data integrity
 
-Browser path:
-
-```text
-Browser
-→ private-web /api/private/*
-→ Next.js server proxy
-→ X-PriceWatch-Token
-→ PriceWatch.Private
-```
-
-Mutation requests also validate same-origin intent.
-
----
-
-## 4.3 Concurrency and Reliability
-
-Only one scrape run executes globally at a time.
-
-Coordination uses a PostgreSQL session advisory lock.
-
-After acquiring the lock:
-
-```text
-stale Running runs
-→ Abandoned
-```
-
-Individual scrape failures must not corrupt unrelated Source or Product state.
-
-If PostgreSQL is unavailable, the system fails closed.
-
----
-
-## 4.4 Data Integrity
-
-The database shall enforce core invariants including:
-
-- positive quantities,
-- non-negative prices where applicable,
-- positive configured intervals,
-- valid Source/Product relationships,
-- no duplicate result for the same run/source where applicable.
-
-Historical accepted observations must remain attributable to their Source.
+- Keep stable item/source/run/observation IDs, UTC timestamps, decimal price precision, archived records, relationships, review states and alert history.
+- Enforce nonnegative prices, positive quantities, source-item relationships and uniqueness as in the existing domain rules, adapted for SQLite's type system.
+- For the migration: source reads use one **read-only, repeatable-read PostgreSQL snapshot**; output is written to a **new SQLite staging file**. Verify table counts, serialized values, foreign keys and SQLite integrity before making it available. Do not claim the staging schema is already an EF Core SQLite schema.
 
 ---
 
@@ -605,168 +574,113 @@ Duplicate delivery for the same state must be prevented.
 
 ---
 
-# 6. APIs
+# 6. Local Application Interfaces (target)
 
-## 6.1 Public API
-
-Responsibilities:
-
-```text
-Products
-Sources
-Reviews
-History
-Owner-authenticated administration
-```
-
-Logical routes include:
-
-```text
-/api/items
-/api/reviews
-/api/reviews/pending/count
-/api/reviews/{id}/confirm
-/api/reviews/{id}/use-last
-/api/reviews/{id}/manual
-```
-
-Exact route naming may vary.
+- The merged Next.js application offers product and source management, subscriptions, reviews, best-price history, graphs, schedule/run visibility and optional email settings.
+- Prefer server-side data access via a **single** SQLite repository layer. Browser-to-server writes use same-origin protections, validated inputs and explicit allowed operations.
+- Existing public `/api/items`, `/api/reviews` and private dashboard/run/schedule routes are migration inputs, **not two permanent APIs**. Refactor them into local-only Route Handlers/Server Actions as each feature is moved.
+- Keep scraper execution outside the web process. Where the UI exposes “Run now”, it must invoke a constrained local operation rather than accepting shell commands or arbitrary executable paths.
 
 ---
 
-## 6.2 Private API
-
-Responsibilities:
+# 7. Target High-Level Architecture
 
 ```text
-Dashboard
-Run now
-Schedule
-Email alert settings
-Local execution status
+         Browser (only while user opens PriceWatch)
+                           |
+                           v
+            Next.js Local Web (127.0.0.1:3000)
+                   server-side data access
+                           |
+                           v
+                 data/pricewatch.sqlite3
+                  (single source of truth)
+                           ^
+                           |
+            lightweight .NET scrape orchestrator
+                           |
+                   Python + Playwright
+                           ^
+                           |
+                Windows Task Scheduler
+                 (runs, then exits)
 ```
 
-Logical routes include:
-
-```text
-GET    /api/private/dashboard
-POST   /api/private/run
-GET    /api/private/schedule
-PUT    /api/private/schedule
-DELETE /api/private/schedule
-GET    /api/private/email-settings
-PUT    /api/private/email-settings
-POST   /api/private/email-settings/test
-```
-
-Browser access is proxy-only.
+**Migration order:** (1) stage and validate data in SQLite, (2) switch the scraper data layer/locking to SQLite without rewriting its extraction logic, (3) merge `private-web` features into `web` and replace API data access, (4) cut over and retire Neon / cloud deployments. Throughout the transition the existing PostgreSQL application remains operational; do **not** run the old PostgreSQL-writing worker and a new SQLite-writing worker as independent authoritative sources.
 
 ---
 
-# 7. High-Level Architecture
+# 8. Workflows
+
+**Scheduled crawl (no UI required):**
 
 ```text
-                    User
-              ┌──────┴──────┐
-              ▼             ▼
-         Public Web     Private Web
-           Next.js        Next.js
-              │             │
-              ▼             ▼
-           WebApi       Server Proxy
-          ASP.NET            │
-              │              ▼
-              │         Private API
-              │          ASP.NET
-              │              │
-              │      ┌───────┼────────┐
-              ▼      ▼       ▼        ▼
-           Neon PG  PG Lock Python   Task
-                            Scraper  Scheduler
-                               │
-                               ▼
-                        Public Websites
+Windows scheduled task
+→ start lightweight .NET runner
+→ acquire local single-run lock
+→ read due active sources from SQLite
+→ call existing Python Playwright worker
+→ validate accepted/failed/suspicious results
+→ update source-effective prices and best-price history
+→ write scrape results/reviews/alerts to SQLite
+→ release lock and exit
 ```
 
-Neon PostgreSQL is the shared source of truth.
+**Interactive read/edit:**
 
-The execution plane remains local-only.
+```text
+User launches Next.js
+→ browser opens 127.0.0.1:3000
+→ Next.js server-side code reads/writes SQLite
+→ view charts, history, sources, reviews and management
+→ user closes site / stops Next.js (scheduled crawl unaffected)
+```
+
+The existing manual observation and email-alert semantics from sections 2–3 continue unchanged unless explicitly revised.
 
 ---
 
-# 8. Main Workflow
+# 9. Migration Plan and Acceptance Gates
 
-```text
-Scheduler / Run now
-→ acquire global lock
-→ recover stale runs
-→ scrape eligible Sources
-→ validate each result
-→ Accepted / Failed / Suspicious
-→ Failed or Suspicious enters Review
-→ Pending keeps last known effective price
-→ accepted observation updates Source effective price
-→ recalculate Product Best Price State
-→ record history state if price or Source set changed
-→ automatic below-target state queues an email alert
-→ SMTP outbox sender delivers/retries queued alerts
-→ finish run
-```
+## Phase 1 — SQLite data migration (first)
 
-Manual workflow:
+- Keep the legacy PostgreSQL/Neon system unchanged. Use `scripts/migrate_postgres_to_sqlite.py` for a PostgreSQL **read-only** snapshot into `data/pricewatch-staging.sqlite3`.
+- Export the eight business tables: `tracked_items`, `item_sources`, `scrape_runs`, `scrape_results`, `price_history`, `best_price_states`, `best_price_state_sources`, `price_alert_events`.
+- Carry UUIDs and timestamps as text, booleans as integers, and numeric/decimal values as **exact text** in the staging copy to avoid premature float conversion. This staging format is **not yet** the definitive EF Core SQLite runtime mapping; computed PG values are copied as ordinary columns for auditing.
+- Verify each table's row count and content hash, composite relations, `PRAGMA foreign_key_check` and `PRAGMA integrity_check`. Abort on any mismatch. Source Neon data is never deleted or modified.
+- The archive has schema/code, **not actual Neon rows or connection credentials**. Real data export must run on the owner's computer using a read-only credential. Instructions: [`docs/SQLITE_MIGRATION.md`](docs/SQLITE_MIGRATION.md).
 
-```text
-User enters Source-specific Manual price
-→ append accepted Manual observation
-→ recalculate Product Best Price State
-→ record history state if changed
-→ no email
-```
+## Phase 2 — Runtime SQLite integration (later, separately validated)
 
----
+- Create SQLite-provider EF Core migrations and resolve date/decimal/computed-column semantics (including `DateTimeOffset` ordering and exact decimal arithmetic).
+- Import the verified snapshot to the provider-compatible schema; reconcile IDs, observations, history, counts and checksums again.
+- Replace Npgsql-based DB access and PostgreSQL advisory lock with SQLite/local equivalents. Leave Python extraction logic and Windows Task Scheduler cadence intact.
+- Test scheduled crawl with the web process **stopped**, and test web reads while a crawl writes.
 
-# 9. Scale, Bottlenecks, Reliability
+## Phase 3 — Consolidate local UI and retire cloud (later)
 
-Current target:
+- Merge `private-web` pages into `web`, keep shared UI/core contracts, remove redundant API and cloud login after validation.
+- Verify product CRUD, manual price, reviews, price graphs, alerts, task execution and Windows restart behavior.
+- Only then disable Neon access, revoke its credentials and retire cloud infrastructure. Keep an offline archive/backup for rollback.
 
-```text
-one primary user
-small-to-moderate number of products and Sources
-periodic scraping
-one local execution environment
-```
+## Release criteria
 
-Main bottlenecks:
-
-- global scrape serialization,
-- Playwright/external website latency,
-- growing observation/history tables.
-
-Future scaling may use bounded concurrency, stronger indexing, pagination, and retention policies if needed.
-
-Do not introduce distributed infrastructure before current scale requires it.
-
-Known limitations:
-
-1. SMTP delivery is at-least-once; a process crash after provider acceptance but before the Sent status commit can duplicate one message.
-2. First-ever Source observations without any baseline can only receive sanity validation.
-3. SSRF DNS validation retains a theoretical DNS TOCTOU window.
-4. Task scheduling is local-machine infrastructure.
-5. Large history datasets may eventually require additional indexing/retention.
+- Same item/source/history/alert counts and meaningful price results before and after migration.
+- No missing relationships or corrupted timestamps/price precision.
+- Windows Task Scheduler can run the scraper alone; closing Next.js does not stop scheduled crawls.
+- Website listens only on loopback and no untrusted browser mutation can trigger arbitrary local commands.
+- The active system has **one** authoritative SQLite database, and recurring backups are defined before deleting legacy data.
 
 ---
 
 # 10. Design Baseline
 
-The authoritative business chain is:
+The authoritative business chain is unchanged:
 
 ```text
-Source
-→ Price Observation
-→ Source Latest Effective Price
-→ Product Best Price State
-→ Lowest Price History
+Source → Price Observation → Source Latest Effective Price
+→ Product Best Price State → Lowest Price History
 → Optional Automatic Email Alert
 ```
 
-Any future change to functionality, data/API contracts, architecture, security boundaries, concurrency, scheduling, or reliability requires explicit user approval before implementation.
+Local-first architectural decisions override the legacy deployment topology; the business and validation rules in sections 1–3 and 5 are preserved. Any future change to business behavior, scraper extraction, scheduling cadence, SQLite journal mode, or trust boundaries requires the user's explicit approval.

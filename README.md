@@ -1,70 +1,99 @@
-# PriceWatch (Updated 2026-10)
+# PriceWatch Local — migration in progress
 
-PriceWatch is a personal price-tracking system with two execution paths:
+PriceWatch is a **personal, Windows-local price tracker**. The agreed target architecture is **one Next.js website**, **one SQLite database**, and the **existing independently scheduled scraper**. The user opens the website only when needed; **Windows Task Scheduler** runs the scraper even if the website is closed.
 
-- **Web** - public Next.js UI + ASP.NET Core API
-- **Private** - local operator UI + private ASP.NET Core API + Playwright scraper
+> **Status (2026-11-01): Phase 1 — SQLite data migration.** This repository is a snapshot from before the migration. The current applications still use **Neon/PostgreSQL**, separate `web` and `private-web` sites, and .NET API services. **Do not remove Neon or point the existing runtime at the exported SQLite staging file yet.** The owner's local working copy may also contain ESLint upgrades not present in this ZIP.
+>
+> Decisions and staged acceptance gates: [DESIGN.md](DESIGN.md). Step-by-step database migration: [docs/SQLITE_MIGRATION.md](docs/SQLITE_MIGRATION.md).
 
-Both paths use the same PostgreSQL database.
-
-## Architecture
-
-```text
-web                 private-web
- │                       │
- ▼                       ▼
-PriceWatch.WebApi    PriceWatch.Private
- │                       │
- └──────────┬────────────┘
-            ▼
-      PostgreSQL / Neon
-            ▲
-            │
-     Python + Playwright
-```
-
-### Repository layout
+## Target architecture
 
 ```text
-src/
-  PriceWatch.Core/       Shared application logic
-  PriceWatch.Data/       EF Core model and migrations
-  PriceWatch.WebApi/     Public API
-  PriceWatch.Private/    Local/private API and scraper orchestration
-
-web/                     Public Next.js application
-private-web/             Local operator application
-packages/                Shared frontend packages
-scraper/                 Python / Playwright worker
-scripts/dev-stack.mjs    Local stack launcher
+Browser → Next.js local website (127.0.0.1:3000)
+                         |
+                   SQLite database
+                         ^
+                         |
+             lightweight .NET scraper runner
+                         |
+               existing Python/Playwright
+                         ^
+                         |
+                 Windows Task Scheduler
 ```
 
-## Stack
+- SQLite is the **eventual single source of truth**. No Neon/cloud sync is planned.
+- The existing Python scraping/extraction code stays intact; only its data integration is migrated later.
+- The crawler is an independent process, scheduled by **Windows Task Scheduler** and not dependent on the website running.
+- No separate domain allowlist will be added. Keep the scraper's existing network guard and input validation.
+- SQLite **WAL is deferred**; v1 starts with default journaling and a bounded busy timeout.
+- Merge the former public and private web functions into one local interface after the data migration is verified.
+- Remove cloud authentication, cloud deployments and redundant APIs **after** a successful cutover, not before.
 
-- .NET / ASP.NET Core
-- Entity Framework Core + Npgsql
-- PostgreSQL / Neon
-- Next.js + React + TypeScript
-- Python + Playwright
-- Microsoft Identity Platform
-- Docker / Cloud Run / GitHub Actions
+## Phase 1: migrate data from Neon/PostgreSQL to SQLite
 
-## Local development
+The migration utility in this repository creates a **new, verified, staging SQLite file** from a read-only, repeatable-read PostgreSQL snapshot. It preserves the eight current business tables, keys, history, dates and exact text representations of decimals. It **does not** alter the original PostgreSQL database or enable SQLite in the .NET services yet.
 
-### Requirements
+Requirements for this one-time export: Python 3.10+ and `psycopg` (separate from the scraper dependencies).
 
-- .NET SDK
-- Node.js + npm
-- Python 3
-- Access to a PostgreSQL-compatible database
+```powershell
+python -m pip install "psycopg[binary]"
+# Enter the PostgreSQL URI from Neon privately; don't commit or paste it in logs.
+$secureDsn = Read-Host 'Legacy PostgreSQL URI (hidden)' -AsSecureString
+$env:PRICEWATCH_LEGACY_PG_DSN = [System.Net.NetworkCredential]::new('', $secureDsn).Password
 
-Install JavaScript dependencies:
+python scripts/migrate_postgres_to_sqlite.py --out data/pricewatch-staging.sqlite3
+python scripts/migrate_postgres_to_sqlite.py --verify data/pricewatch-staging.sqlite3
 
-```bash
+Remove-Item Env:PRICEWATCH_LEGACY_PG_DSN
+```
+
+**Important:** The connection must be a PostgreSQL URI or a DSN understood by `psycopg`; the existing `.NET/Npgsql` `Host=...;Port=...` connection string is **not interchangeable**. If possible, use a database role limited to `SELECT` on the business tables. The script additionally uses a **read-only database transaction**. If the output file exists, the utility refuses to overwrite it. Save the data and its backups outside Git.
+
+Full prerequisite, data validation, rollback, privacy and cutover details are in [docs/SQLITE_MIGRATION.md](docs/SQLITE_MIGRATION.md). **The uploaded archive does not contain the owner's Neon data**, so no real records have been copied in this snapshot.
+
+## Repository layout (currently present)
+
+```text
+src/PriceWatch.Core/       Shared business rules (retain)
+src/PriceWatch.Data/       EF Core model + PostgreSQL migrations (SQLite provider later)
+src/PriceWatch.WebApi/     Existing public API (retire later)
+src/PriceWatch.Private/    Scraper orchestration / local API (slim later)
+web/                       Existing main Next.js site (target merger destination)
+private-web/               Existing operator site (merge later)
+packages/                  Shared frontend packages
+scraper/                   Existing Python / Playwright worker (retain)
+scripts/migrate_postgres_to_sqlite.py  Read-only Neon -> SQLite data staging
+```
+
+## Current legacy stack: development commands
+
+Until application cutover, the snapshot still requires .NET 10, Node.js/npm, Python/Playwright, and a PostgreSQL database. You can keep using the existing development launchers with your **current** PostgreSQL configuration:
+
+```powershell
 npm ci
+Copy-Item .env.example .env.local
+# Configure the existing DATABASE_CONNECTION_STRING in .env.local.
+npm run dev:web:all        # http://localhost:3000 + public .NET API
+npm run dev:private:all    # http://localhost:3001 + local .NET API
 ```
 
-For the scraper on Windows:
+The repository launcher maps `.env.local` to the existing applications; direct `dotnet run` does not automatically load those values.
+
+Existing individual commands:
+
+```powershell
+npm run dev:web
+npm run dev:web:api
+npm run dev:private
+npm run dev:private:api
+npm run private:run-once
+npm run db:update           # PostgreSQL migrations ONLY; not for SQLite staging
+```
+
+> The legacy web and private app builds may fail until existing CSS imports from `shadcn/tailwind.css` are resolved. This is separate from SQLite migration. Do not assume the target one-site architecture is already implemented.
+
+### Scraper dependencies
 
 ```powershell
 python -m venv .venv
@@ -72,127 +101,26 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m playwright install firefox
 ```
 
-## Configuration
-
-Local development uses a single repository-level `.env.local`.
-
-```powershell
-Copy-Item .env.example .env.local
-```
-
-Minimum database configuration:
-
-```dotenv
-DATABASE_CONNECTION_STRING="Host=<host>;Port=5432;Database=<database>;Username=<user>;Password=<password>;SSL Mode=Require"
-```
-
-Use the **Npgsql connection-string format** above. Do not pass the Neon/PostgreSQL URI form (`postgresql://...`) directly to the .NET applications.
-
-The remaining variables are documented in [`.env.example`](.env.example), including:
-
-- frontend/API URLs
-- Microsoft authentication
-- owner authorization
-- private scraper runtime options
-
-`.env.local` is ignored by Git and must never be committed.
-
-## Running the project
-
-### Web stack
-
-Starts `PriceWatch.WebApi` and `web` together:
-
-```bash
-npm run dev:web:all
-```
-
-Default endpoints:
-
-```text
-Web      http://localhost:3000
-Web API  http://localhost:5128
-```
-
-### Private stack
-
-Starts `PriceWatch.Private` and `private-web` together:
-
-```bash
-npm run dev:private:all
-```
-
-Default endpoints:
-
-```text
-Private Web  http://localhost:3001
-Private API  http://127.0.0.1:5188
-```
-
-Windows launchers are also available:
-
-```text
-dev-web.cmd
-dev-private.cmd
-```
-
-### Individual processes
-
-```bash
-npm run dev:web
-npm run dev:web:api
-
-npm run dev:private
-npm run dev:private:api
-```
-
-The repository launcher loads `.env.local` and maps its values to ASP.NET Core and Next.js configuration. Running a backend directly with `dotnet run` bypasses that launcher.
-
-## Database migrations
-
-Apply migrations using the same `.env.local` configuration:
-
-```bash
-npm run db:update
-```
-
-EF Core migrations live in `src/PriceWatch.Data`.
+Do not change the Windows Task Scheduler job as part of the **data-export phase**. Switch its DB connection only after the .NET SQLite runner and end-to-end verification are ready.
 
 ## Validation
 
-Frontend:
-
-```bash
+```powershell
+python -m unittest discover -s tests/sqlite_migration -v
+python scripts/migrate_postgres_to_sqlite.py --verify data/pricewatch-staging.sqlite3
 npm run lint
 npm run build:web
 npm run build:private
+dotnet test PriceWatch.slnx
 ```
 
-.NET:
+The SQLite verification command requires a previously exported staging file. Existing frontend/build tests can fail for unrelated preexisting issues; **do not interpret such failures as evidence that the migration succeeded or failed**. .NET SQLite-specific integration tests are part of Phase 2.
 
-```bash
-dotnet restore PriceWatch.slnx
-dotnet build PriceWatch.slnx -c Release --no-restore
-dotnet test PriceWatch.slnx -c Release --no-build
-```
+## Safety and operational limits
 
-Scraper:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest scraper\tests
-```
-
-## Deployment
-
-`PriceWatch.WebApi` is containerized with `Dockerfile.webapi` and deployed through GitHub Actions / Cloud Run.
-
-The public and private applications intentionally remain separate: browser automation and operator-only functionality belong to the trusted local path and should not be exposed publicly.
-
-Production secrets must be supplied by the deployment platform, not `.env.local`.
-
-## Security
-
-- Never commit database credentials, tokens, certificates, or `.env.local`.
-- Rotate credentials immediately if they appear in logs, screenshots, commits, issues, or chat.
-- Keep `PriceWatch.Private` bound to a trusted/local environment.
-- Treat scraper output as untrusted external input until validated.
+- Bind the final single web service to **127.0.0.1**, not a public network interface. Keep same-origin checks on any mutating local endpoint.
+- Keep the Playwright network guard (localhost/private-address blocking) even without a user-maintained domain allowlist.
+- Use a single consistent local SQLite path for the UI and worker after cutover; don't copy live databases casually.
+- Use short transactions, configure SQLite busy retries, and introduce WAL only if warranted by observed usage.
+- Back up SQLite consistently and confirm restore capability before deleting Neon. Never commit connection strings, `.env.local`, `.db` files or data exports.
+- The planned reduction of cloud services and authentication only takes effect **after** all existing product management, price history, review and scheduled-scrape workflows are validated.
