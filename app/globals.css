@@ -1,0 +1,6 @@
+/* Classic PriceWatch: no Tailwind, shadcn, or remote stylesheets. */
+@import "./classic-base.css";
+@import "./classic-layout.css";
+@import "./classic-controls.css";
+@import "./classic-products.css";
+@import "./classic-metrics.css";

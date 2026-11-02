@@ -1,126 +1,88 @@
-# PriceWatch Local — migration in progress
+# PriceWatch Local
 
-PriceWatch is a **personal, Windows-local price tracker**. The agreed target architecture is **one Next.js website**, **one SQLite database**, and the **existing independently scheduled scraper**. The user opens the website only when needed; **Windows Task Scheduler** runs the scraper even if the website is closed.
+PriceWatch is a local price-tracking app. It monitors product prices, shows price history, and sends email alerts when a new best price meets your target. The website and scraper share one SQLite database, so the scraper can run even when the website is closed.
 
-> **Status (2026-11-01): Phase 1 — SQLite data migration.** This repository is a snapshot from before the migration. The current applications still use **Neon/PostgreSQL**, separate `web` and `private-web` sites, and .NET API services. **Do not remove Neon or point the existing runtime at the exported SQLite staging file yet.** The owner's local working copy may also contain ESLint upgrades not present in this ZIP.
->
-> Decisions and staged acceptance gates: [DESIGN.md](DESIGN.md). Step-by-step database migration: [docs/SQLITE_MIGRATION.md](docs/SQLITE_MIGRATION.md).
+Note:
+This project was originally deployed on Vercel and other cloud services as a portfolio showcase. However, after using it for about a month, I realized that I rarely needed to access it online, and I barely used many of its features. Therefore, I decided to run it locally instead of hosting it in the cloud.
 
-## Target architecture
+Rather than showcasing a project with features I rarely use, I decided to rebuild it with a simpler design and a clearer focus on demonstrating my system design skills.
 
-```text
-Browser → Next.js local website (127.0.0.1:3000)
-                         |
-                   SQLite database
-                         ^
-                         |
-             lightweight .NET scraper runner
-                         |
-               existing Python/Playwright
-                         ^
-                         |
-                 Windows Task Scheduler
-```
+I also decided not to use shadcn/ui this time because I encountered security vulnerabilities involving dependencies such as `glob` and `minimatch` during development. Rather than continuing with the same dependency setup, I used AI to help recreate a similar design using plain CSS.
 
-- SQLite is the **eventual single source of truth**. No Neon/cloud sync is planned.
-- The existing Python scraping/extraction code stays intact; only its data integration is migrated later.
-- The crawler is an independent process, scheduled by **Windows Task Scheduler** and not dependent on the website running.
-- No separate domain allowlist will be added. Keep the scraper's existing network guard and input validation.
-- SQLite **WAL is deferred**; v1 starts with default journaling and a bounded busy timeout.
-- Merge the former public and private web functions into one local interface after the data migration is verified.
-- Remove cloud authentication, cloud deployments and redundant APIs **after** a successful cutover, not before.
+## Tech Stack
 
-## Phase 1: migrate data from Neon/PostgreSQL to SQLite
+| Part | Technology |
+| --- | --- |
+| Web app | Next.js 16, React 19, TypeScript |
+| Styling | Plain CSS, based on the original PriceWatch design |
+| Database | SQLite (Node.js built-in `node:sqlite` and Python `sqlite3`) |
+| Scraper | Python, Playwright, Firefox |
+| Email alerts | SMTP |
+| Scheduling | Windows Task Scheduler, PowerShell |
 
-The migration utility in this repository creates a **new, verified, staging SQLite file** from a read-only, repeatable-read PostgreSQL snapshot. It preserves the eight current business tables, keys, history, dates and exact text representations of decimals. It **does not** alter the original PostgreSQL database or enable SQLite in the .NET services yet.
+No cloud database, account login, .NET API, or separate web server is required.
 
-Requirements for this one-time export: Python 3.10+ and `psycopg` (separate from the scraper dependencies).
+## Getting Started
 
-```powershell
-python -m pip install "psycopg[binary]"
-# Enter the PostgreSQL URI from Neon privately; don't commit or paste it in logs.
-$secureDsn = Read-Host 'Legacy PostgreSQL URI (hidden)' -AsSecureString
-$env:PRICEWATCH_LEGACY_PG_DSN = [System.Net.NetworkCredential]::new('', $secureDsn).Password
+**Requirements:** Windows, Node.js 22.13 or later, Python 3, and the existing `pricewatch.sqlite3` database.
 
-python scripts/migrate_postgres_to_sqlite.py --out data/pricewatch-staging.sqlite3
-python scripts/migrate_postgres_to_sqlite.py --verify data/pricewatch-staging.sqlite3
+1. Extract the project into a new folder. Copy your latest SQLite database to `data/pricewatch.sqlite3`. Stop other programs writing to the database before copying it.
+2. Open PowerShell in the project folder and install dependencies:
 
-Remove-Item Env:PRICEWATCH_LEGACY_PG_DSN
-```
+   ```powershell
+   npm install
+   python -m pip install -r scraper/requirements.txt
+   python -m playwright install firefox
+   ```
 
-**Important:** The connection must be a PostgreSQL URI or a DSN understood by `psycopg`; the existing `.NET/Npgsql` `Host=...;Port=...` connection string is **not interchangeable**. If possible, use a database role limited to `SELECT` on the business tables. The script additionally uses a **read-only database transaction**. If the output file exists, the utility refuses to overwrite it. Save the data and its backups outside Git.
+3. Check the database and start the website:
 
-Full prerequisite, data validation, rollback, privacy and cutover details are in [docs/SQLITE_MIGRATION.md](docs/SQLITE_MIGRATION.md). **The uploaded archive does not contain the owner's Neon data**, so no real records have been copied in this snapshot.
+   ```powershell
+   npm run check:db
+   npm run dev
+   ```
 
-## Repository layout (currently present)
+4. Open **http://127.0.0.1:3000**.
 
-```text
-src/PriceWatch.Core/       Shared business rules (retain)
-src/PriceWatch.Data/       EF Core model + PostgreSQL migrations (SQLite provider later)
-src/PriceWatch.WebApi/     Existing public API (retire later)
-src/PriceWatch.Private/    Scraper orchestration / local API (slim later)
-web/                       Existing main Next.js site (target merger destination)
-private-web/               Existing operator site (merge later)
-packages/                  Shared frontend packages
-scraper/                   Existing Python / Playwright worker (retain)
-scripts/migrate_postgres_to_sqlite.py  Read-only Neon -> SQLite data staging
-```
-
-## Current legacy stack: development commands
-
-Until application cutover, the snapshot still requires .NET 10, Node.js/npm, Python/Playwright, and a PostgreSQL database. You can keep using the existing development launchers with your **current** PostgreSQL configuration:
+To run the full test and build checks on Windows, use:
 
 ```powershell
-npm ci
-Copy-Item .env.example .env.local
-# Configure the existing DATABASE_CONNECTION_STRING in .env.local.
-npm run dev:web:all        # http://localhost:3000 + public .NET API
-npm run dev:private:all    # http://localhost:3001 + local .NET API
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
 ```
 
-The repository launcher maps `.env.local` to the existing applications; direct `dotnet run` does not automatically load those values.
+## Using PriceWatch
 
-Existing individual commands:
+Use the tabs at the top of the website:
+
+- **Products:** View, add, edit, and track products and their prices.
+- **Subscriptions:** Manage the products you follow.
+- **Reviews:** Approve or reject suspicious scraped prices.
+- **Scrape runs:** Check recent scraping results and errors.
+- **Email alerts:** Configure SMTP, send a test email, and review alerts.
+- **Schedule:** View the Windows task and click **Run now** to start scraping.
+
+### Run the Scraper Manually
 
 ```powershell
-npm run dev:web
-npm run dev:web:api
-npm run dev:private
-npm run dev:private:api
-npm run private:run-once
-npm run db:update           # PostgreSQL migrations ONLY; not for SQLite staging
+python scraper/run_once.py
 ```
 
-> The legacy web and private app builds may fail until existing CSS imports from `shadcn/tailwind.css` are resolved. This is separate from SQLite migration. Do not assume the target one-site architecture is already implemented.
+The scraper reads and writes the same SQLite database. The website does not need to be running.
 
-### Scraper dependencies
+### Set Up Automatic Scraping (Windows)
+
+Run this once from PowerShell in the project folder to schedule a daily scrape at 09:00:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r scraper\requirements.txt
-.\.venv\Scripts\python.exe -m playwright install firefox
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduler.ps1 -At "09:00"
 ```
 
-Do not change the Windows Task Scheduler job as part of the **data-export phase**. Switch its DB connection only after the .NET SQLite runner and end-to-end verification are ready.
+You can change the time by changing `-At`. Open the **Schedule** tab to see task status and use **Run now**. The default scheduled task requires the Windows user to remain signed in; the website may be closed.
 
-## Validation
+## Notes
 
-```powershell
-python -m unittest discover -s tests/sqlite_migration -v
-python scripts/migrate_postgres_to_sqlite.py --verify data/pricewatch-staging.sqlite3
-npm run lint
-npm run build:web
-npm run build:private
-dotnet test PriceWatch.slnx
-```
-
-The SQLite verification command requires a previously exported staging file. Existing frontend/build tests can fail for unrelated preexisting issues; **do not interpret such failures as evidence that the migration succeeded or failed**. .NET SQLite-specific integration tests are part of Phase 2.
-
-## Safety and operational limits
-
-- Bind the final single web service to **127.0.0.1**, not a public network interface. Keep same-origin checks on any mutating local endpoint.
-- Keep the Playwright network guard (localhost/private-address blocking) even without a user-maintained domain allowlist.
-- Use a single consistent local SQLite path for the UI and worker after cutover; don't copy live databases casually.
-- Use short transactions, configure SQLite busy retries, and introduce WAL only if warranted by observed usage.
-- Back up SQLite consistently and confirm restore capability before deleting Neon. Never commit connection strings, `.env.local`, `.db` files or data exports.
-- The planned reduction of cloud services and authentication only takes effect **after** all existing product management, price history, review and scheduled-scrape workflows are validated.
+- Data is stored in `data/pricewatch.sqlite3` by default. You can set `PRICEWATCH_SQLITE_PATH` to use another file.
+- Back up your SQLite file before upgrading or testing changes.
+- SMTP credentials are stored in the local SQLite database in plain text. Protect the database and its backups; use an app-specific email password.
+- The website is intended for local use only. Do not expose its Scheduler API to the internet or a LAN.
+- See [DESIGN.md](DESIGN.md) for architecture and implementation details.

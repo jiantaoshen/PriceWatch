@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""network_guard: preserve the tested extraction and public-network guard logic."""
+
 import asyncio
 import ipaddress
 import re
