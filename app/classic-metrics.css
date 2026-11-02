@@ -1,0 +1,127 @@
+/* Classic PriceWatch visual foundations (part 2). */
+.price-stat .caption {
+  color: var(--muted-fg);
+  font-size: 12px;
+  margin-bottom: 9px;
+}
+
+.price-stat strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.card-footer {
+  border-top: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-footer a {
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.metric {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.metric .label {
+  font-size: 12px;
+  color: var(--muted-fg);
+}
+
+.metric .value {
+  font-size: 26px;
+  font-weight: 680;
+  letter-spacing: -.6px;
+  margin-top: 7px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 5px;
+  background: #f0f3f7;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.status-pill.good {
+  background: #e9f7ee;
+  color: #168142;
+}
+
+.status-pill.bad {
+  background: #ffeded;
+  color: #b42318;
+}
+
+.status-pill.warn {
+  background: #fff2da;
+  color: #986000;
+}
+
+.details-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.details-panel p {
+  margin: 0;
+  color: var(--muted-fg);
+  font-size: 13px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width:980px) {
+  .product-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+  .metric-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+
+@media (max-width:620px) {
+  .product-grid,.metric-grid {
+    grid-template-columns: 1fr;
+  }
+  .filter-toolbar form {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+.chart-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.chart-wrap svg {
+  width: 100%;
+  min-width: 450px;
+  max-height: 340px;
+}

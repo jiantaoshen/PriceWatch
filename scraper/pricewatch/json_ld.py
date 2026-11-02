@@ -1,3 +1,4 @@
+"""json_ld: preserve the tested extraction and public-network guard logic."""
 import json
 from .price_parser import parse_price
 

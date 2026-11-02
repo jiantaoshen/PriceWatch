@@ -1,3 +1,4 @@
+"""test_network_guard: preserve the tested extraction and public-network guard logic."""
 import asyncio
 
 import pytest

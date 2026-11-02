@@ -1,3 +1,4 @@
+"""test_price_parser: preserve the tested extraction and public-network guard logic."""
 from pricewatch.price_parser import parse_price
 
 

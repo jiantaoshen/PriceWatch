@@ -1,3 +1,4 @@
+"""price_parser: preserve the tested extraction and public-network guard logic."""
 import re
 
 

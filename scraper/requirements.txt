@@ -1,2 +1,3 @@
+# Browser automation and optional Python unit tests.
 playwright>=1.55,<2
 pytest>=8,<9

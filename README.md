@@ -1,198 +1,88 @@
-# PriceWatch (Updated 2026-10)
+# PriceWatch Local
 
-PriceWatch is a personal price-tracking system with two execution paths:
+PriceWatch is a local price-tracking app. It monitors product prices, shows price history, and sends email alerts when a new best price meets your target. The website and scraper share one SQLite database, so the scraper can run even when the website is closed.
 
-- **Web** - public Next.js UI + ASP.NET Core API
-- **Private** - local operator UI + private ASP.NET Core API + Playwright scraper
+Note:
+This project was originally deployed on Vercel and other cloud services as a portfolio showcase. However, after using it for about a month, I realized that I rarely needed to access it online, and I barely used many of its features. Therefore, I decided to run it locally instead of hosting it in the cloud.
 
-Both paths use the same PostgreSQL database.
+Rather than showcasing a project with features I rarely use, I decided to rebuild it with a simpler design and a clearer focus on demonstrating my system design skills.
 
-## Architecture
+I also decided not to use shadcn/ui this time because I encountered security vulnerabilities involving dependencies such as `glob` and `minimatch` during development. Rather than continuing with the same dependency setup, I used AI to help recreate a similar design using plain CSS.
 
-```text
-web                 private-web
- │                       │
- ▼                       ▼
-PriceWatch.WebApi    PriceWatch.Private
- │                       │
- └──────────┬────────────┘
-            ▼
-      PostgreSQL / Neon
-            ▲
-            │
-     Python + Playwright
-```
+## Tech Stack
 
-### Repository layout
+| Part | Technology |
+| --- | --- |
+| Web app | Next.js 16, React 19, TypeScript |
+| Styling | Plain CSS, based on the original PriceWatch design |
+| Database | SQLite (Node.js built-in `node:sqlite` and Python `sqlite3`) |
+| Scraper | Python, Playwright, Firefox |
+| Email alerts | SMTP |
+| Scheduling | Windows Task Scheduler, PowerShell |
 
-```text
-src/
-  PriceWatch.Core/       Shared application logic
-  PriceWatch.Data/       EF Core model and migrations
-  PriceWatch.WebApi/     Public API
-  PriceWatch.Private/    Local/private API and scraper orchestration
+No cloud database, account login, .NET API, or separate web server is required.
 
-web/                     Public Next.js application
-private-web/             Local operator application
-packages/                Shared frontend packages
-scraper/                 Python / Playwright worker
-scripts/dev-stack.mjs    Local stack launcher
-```
+## Getting Started
 
-## Stack
+**Requirements:** Windows, Node.js 22.13 or later, Python 3, and the existing `pricewatch.sqlite3` database.
 
-- .NET / ASP.NET Core
-- Entity Framework Core + Npgsql
-- PostgreSQL / Neon
-- Next.js + React + TypeScript
-- Python + Playwright
-- Microsoft Identity Platform
-- Docker / Cloud Run / GitHub Actions
+1. Extract the project into a new folder. Copy your latest SQLite database to `data/pricewatch.sqlite3`. Stop other programs writing to the database before copying it.
+2. Open PowerShell in the project folder and install dependencies:
 
-## Local development
+   ```powershell
+   npm install
+   python -m pip install -r scraper/requirements.txt
+   python -m playwright install firefox
+   ```
 
-### Requirements
+3. Check the database and start the website:
 
-- .NET SDK
-- Node.js + npm
-- Python 3
-- Access to a PostgreSQL-compatible database
+   ```powershell
+   npm run check:db
+   npm run dev
+   ```
 
-Install JavaScript dependencies:
+4. Open **http://127.0.0.1:3000**.
 
-```bash
-npm ci
-```
-
-For the scraper on Windows:
+To run the full test and build checks on Windows, use:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r scraper\requirements.txt
-.\.venv\Scripts\python.exe -m playwright install firefox
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
 ```
 
-## Configuration
+## Using PriceWatch
 
-Local development uses a single repository-level `.env.local`.
+Use the tabs at the top of the website:
+
+- **Products:** View, add, edit, and track products and their prices.
+- **Subscriptions:** Manage the products you follow.
+- **Reviews:** Approve or reject suspicious scraped prices.
+- **Scrape runs:** Check recent scraping results and errors.
+- **Email alerts:** Configure SMTP, send a test email, and review alerts.
+- **Schedule:** View the Windows task and click **Run now** to start scraping.
+
+### Run the Scraper Manually
 
 ```powershell
-Copy-Item .env.example .env.local
+python scraper/run_once.py
 ```
 
-Minimum database configuration:
+The scraper reads and writes the same SQLite database. The website does not need to be running.
 
-```dotenv
-DATABASE_CONNECTION_STRING="Host=<host>;Port=5432;Database=<database>;Username=<user>;Password=<password>;SSL Mode=Require"
-```
+### Set Up Automatic Scraping (Windows)
 
-Use the **Npgsql connection-string format** above. Do not pass the Neon/PostgreSQL URI form (`postgresql://...`) directly to the .NET applications.
-
-The remaining variables are documented in [`.env.example`](.env.example), including:
-
-- frontend/API URLs
-- Microsoft authentication
-- owner authorization
-- private scraper runtime options
-
-`.env.local` is ignored by Git and must never be committed.
-
-## Running the project
-
-### Web stack
-
-Starts `PriceWatch.WebApi` and `web` together:
-
-```bash
-npm run dev:web:all
-```
-
-Default endpoints:
-
-```text
-Web      http://localhost:3000
-Web API  http://localhost:5128
-```
-
-### Private stack
-
-Starts `PriceWatch.Private` and `private-web` together:
-
-```bash
-npm run dev:private:all
-```
-
-Default endpoints:
-
-```text
-Private Web  http://localhost:3001
-Private API  http://127.0.0.1:5188
-```
-
-Windows launchers are also available:
-
-```text
-dev-web.cmd
-dev-private.cmd
-```
-
-### Individual processes
-
-```bash
-npm run dev:web
-npm run dev:web:api
-
-npm run dev:private
-npm run dev:private:api
-```
-
-The repository launcher loads `.env.local` and maps its values to ASP.NET Core and Next.js configuration. Running a backend directly with `dotnet run` bypasses that launcher.
-
-## Database migrations
-
-Apply migrations using the same `.env.local` configuration:
-
-```bash
-npm run db:update
-```
-
-EF Core migrations live in `src/PriceWatch.Data`.
-
-## Validation
-
-Frontend:
-
-```bash
-npm run lint
-npm run build:web
-npm run build:private
-```
-
-.NET:
-
-```bash
-dotnet restore PriceWatch.slnx
-dotnet build PriceWatch.slnx -c Release --no-restore
-dotnet test PriceWatch.slnx -c Release --no-build
-```
-
-Scraper:
+Run this once from PowerShell in the project folder to schedule a daily scrape at 09:00:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest scraper\tests
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-scheduler.ps1 -At "09:00"
 ```
 
-## Deployment
+You can change the time by changing `-At`. Open the **Schedule** tab to see task status and use **Run now**. The default scheduled task requires the Windows user to remain signed in; the website may be closed.
 
-`PriceWatch.WebApi` is containerized with `Dockerfile.webapi` and deployed through GitHub Actions / Cloud Run.
+## Notes
 
-The public and private applications intentionally remain separate: browser automation and operator-only functionality belong to the trusted local path and should not be exposed publicly.
-
-Production secrets must be supplied by the deployment platform, not `.env.local`.
-
-## Security
-
-- Never commit database credentials, tokens, certificates, or `.env.local`.
-- Rotate credentials immediately if they appear in logs, screenshots, commits, issues, or chat.
-- Keep `PriceWatch.Private` bound to a trusted/local environment.
-- Treat scraper output as untrusted external input until validated.
+- Data is stored in `data/pricewatch.sqlite3` by default. You can set `PRICEWATCH_SQLITE_PATH` to use another file.
+- Back up your SQLite file before upgrading or testing changes.
+- SMTP credentials are stored in the local SQLite database in plain text. Protect the database and its backups; use an app-specific email password.
+- The website is intended for local use only. Do not expose its Scheduler API to the internet or a LAN.
+- See [DESIGN.md](DESIGN.md) for architecture and implementation details.
