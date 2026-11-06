@@ -7,7 +7,7 @@ const tabs = [
   { href: "/subscriptions", title: "Subscriptions" },
   { href: "/reviews", title: "Reviews" },
   { href: "/runs", title: "Scrape runs" },
-  { href: "/email", title: "Email alerts" },
+  { href: "/notifications", title: "Notifications" },
   { href: "/schedule", title: "Schedule" },
 ];
 export function SiteHeader() {

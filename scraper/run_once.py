@@ -8,7 +8,7 @@ import sys
 from uuid import uuid4
 
 from price_store import now, save_result
-from mail_alerts import send_alerts
+from windows_alerts import send_alerts
 from run_lock import ScrapeLock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -78,9 +78,9 @@ def main():
                 db.execute("""UPDATE scrape_runs SET finished_at=?,status=?,successful=?,
                   failed=?,suspicious=? WHERE id=?""",
                   (now(),state,counts["Success"],counts["Failed"],counts["Suspicious"],run_id))
-            mailed = send_alerts(db, started)
-            if mailed:
-                print(f"Sent {mailed} price alert emails")
+            notified = send_alerts(db, started)
+            if notified:
+                print(f"Submitted Windows notifications for {notified} price alerts")
             print(f"Run {run_id}: {state}, success={counts['Success']}, "
                   f"failed={counts['Failed']}, suspicious={counts['Suspicious']}")
             return 0 if state == "Success" else 1
