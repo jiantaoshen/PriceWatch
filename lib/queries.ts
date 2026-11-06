@@ -5,7 +5,7 @@ export function listItems() {
   return withDb((db) =>
     all(
       db,
-      `SELECT i.id,i.name,i.item_type,i.currency,i.unit,i.current_price,i.current_unit_price,
+      `SELECT i.id,i.name,i.currency,i.unit,i.current_price,i.current_unit_price,
         i.previous_unit_price,i.target_price,i.target_unit_price,i.tracking_enabled,i.archived_at,
         (SELECT COUNT(*) FROM item_sources s WHERE s.item_id=i.id AND s.archived_at IS NULL) AS sources,
         (SELECT GROUP_CONCAT(s.store, ', ') FROM item_sources s

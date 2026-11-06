@@ -48,8 +48,6 @@ export function optionalPrice(
 export function saveItem(form: FormData, itemId?: string) {
   const id = itemId || randomUUID();
   const name = required(form.get("name"));
-  const itemType =
-    form.get("item_type") === "Subscription" ? "Subscription" : "Product";
   const currency = required(form.get("currency"), 3).toUpperCase();
 
   if (!/^[A-Z]{3}$/.test(currency)) {
@@ -72,12 +70,11 @@ export function saveItem(form: FormData, itemId?: string) {
     transaction(db, () => {
       if (itemId) {
         const result = db.prepare(
-          `UPDATE tracked_items SET name=?,item_type=?,currency=?,unit=?,
+          `UPDATE tracked_items SET name=?,currency=?,unit=?,
             target_price=?,comparison_quantity=?,target_unit_price=?,tracking_enabled=?,updated_at=?
             WHERE id=? AND archived_at IS NULL`,
         ).run(
           name,
-          itemType,
           currency,
           unit,
           target,
@@ -97,7 +94,7 @@ export function saveItem(form: FormData, itemId?: string) {
             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         ).run(
           id,
-          itemType,
+          "Product",
           name,
           currency,
           unit,

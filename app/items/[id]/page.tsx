@@ -74,29 +74,16 @@ export default async function ItemPage({ params }: ItemPageProps) {
               />
             </label>
 
-            <div className={ui.twoColumns}>
-              <label className={ui.label}>
-                Type
-                <select
-                  className={ui.field}
-                  name="item_type"
-                  defaultValue={text(item.item_type)}
-                >
-                  <option>Product</option>
-                  <option>Subscription</option>
-                </select>
-              </label>
-              <label className={ui.label}>
-                Currency
-                <input
-                  className={ui.field}
-                  name="currency"
-                  defaultValue={currency}
-                  maxLength={3}
-                  required
-                />
-              </label>
-            </div>
+            <label className={ui.label}>
+              Currency
+              <input
+                className={ui.field}
+                name="currency"
+                defaultValue={currency}
+                maxLength={3}
+                required
+              />
+            </label>
 
             <div className={ui.twoColumns}>
               <label className={ui.label}>

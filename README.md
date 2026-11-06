@@ -52,7 +52,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
 Use the tabs at the top of the website:
 
 - **Products:** View, add, edit, and track products and their prices. In each item, restore archived sources, optionally enter manual prices, or exclude a suspicious record without erasing its audit trail.
-- **Subscriptions:** Manage the products you follow.
 - **Scrape runs:** Check recent scraping results and errors.
 - **Notifications:** Test Windows desktop notifications and view the existing below-target alert history.
 - **Schedule:** Install or update a daily/weekly Windows task and change its time, choose weekdays, run now, stop a running task, enable/disable the schedule, or delete the task. All from the website.
@@ -133,3 +132,7 @@ The Windows Shell banner can be transient on Windows 11 and is not a guarantee o
 - `app/globals.css` declares Tailwind v4 and shared theme colors; `lib/ui.ts` contains repeated button, input, table and panel utility classes.
 - `components/page-heading.tsx` centralizes recurring page headings. Individual pages keep their Tailwind utilities close to their JSX.
 - Since styles are compiled during `npm run dev` / `npm run build`, **install Node dependencies first** (`npm install`); a network connection is required for the first install.
+
+### Subscription feature removal
+
+The Subscriptions page and item-type selector have been removed. Existing rows with `tracked_items.item_type='Subscription'` are preserved and now appear in the Products list, including their price history. New items are always stored as `Product`. The legacy `item_type` database column is retained for compatibility; no data migration is required.

@@ -6,7 +6,6 @@ import { cx } from "../lib/ui";
 
 const tabs = [
   { href: "/", title: "Products" },
-  { href: "/subscriptions", title: "Subscriptions" },
   { href: "/runs", title: "Scrape runs" },
   { href: "/notifications", title: "Notifications" },
   { href: "/schedule", title: "Schedule" },

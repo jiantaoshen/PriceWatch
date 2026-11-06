@@ -17,7 +17,6 @@ export default async function Home({
 
   return (
     <ProductList
-      kind="Product"
       filter={filter}
       search={q}
       sort={sort}

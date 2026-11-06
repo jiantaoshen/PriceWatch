@@ -3,18 +3,11 @@ import { PageHeading } from "../../../components/page-heading";
 import { ui } from "../../../lib/ui";
 import { saveItemAction } from "../../actions";
 
-type NewItemProps = {
-  searchParams: Promise<{ type?: string }>;
-};
-
-export default async function NewItem({ searchParams }: NewItemProps) {
-  const type =
-    (await searchParams).type === "Subscription" ? "Subscription" : "Product";
-
+export default function NewItem() {
   return (
     <>
       <PageHeading
-        title={`Add ${type.toLowerCase()}`}
+        title="Add product"
         description="New items are stored directly in local SQLite."
       />
 
@@ -25,25 +18,16 @@ export default async function NewItem({ searchParams }: NewItemProps) {
             <input className={ui.field} name="name" maxLength={500} required />
           </label>
 
-          <div className={ui.twoColumns}>
-            <label className={ui.label}>
-              Type
-              <select className={ui.field} name="item_type" defaultValue={type}>
-                <option>Product</option>
-                <option>Subscription</option>
-              </select>
-            </label>
-            <label className={ui.label}>
-              Currency
-              <input
-                className={ui.field}
-                name="currency"
-                defaultValue="SEK"
-                maxLength={3}
-                required
-              />
-            </label>
-          </div>
+          <label className={ui.label}>
+            Currency
+            <input
+              className={ui.field}
+              name="currency"
+              defaultValue="SEK"
+              maxLength={3}
+              required
+            />
+          </label>
 
           <div className={ui.twoColumns}>
             <label className={ui.label}>

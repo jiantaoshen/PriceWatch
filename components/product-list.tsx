@@ -7,7 +7,6 @@ import { PageHeading } from "./page-heading";
 import { ProductCard } from "./product-card";
 
 type ProductListProps = {
-  kind: "Product" | "Subscription";
   filter: string;
   search: string;
   sort?: string;
@@ -38,12 +37,11 @@ function isPriceIncrease(item: Row): boolean {
 }
 
 export function ProductList({
-  kind,
   filter,
   search,
   sort = "name",
 }: ProductListProps) {
-  const all = listItems().filter((item) => item.item_type === kind);
+  const all = listItems();
   const active = all.filter((item) => !item.archived_at);
 
   const counts = {
@@ -97,7 +95,6 @@ export function ProductList({
     return text(a.name).localeCompare(text(b.name));
   });
 
-  const basePath = kind === "Product" ? "/" : "/subscriptions";
   const filters = [
     { id: "active", label: "Active", count: counts.active },
     { id: "below", label: "Below target", count: counts.below },
@@ -109,11 +106,11 @@ export function ProductList({
   return (
     <>
       <PageHeading
-        title={kind === "Product" ? "Products" : "Subscriptions"}
+        title="Products"
         description="Compare normalized prices, watch targets, and keep archived items for later."
         action={
-          <Link href={`/items/new?type=${kind}`} className={ui.button}>
-            + Add {kind.toLowerCase()}
+          <Link href="/items/new" className={ui.button}>
+            + Add product
           </Link>
         }
       />
@@ -122,7 +119,7 @@ export function ProductList({
         {filters.map(({ id, label, count }) => (
           <Link
             key={id}
-            href={`${basePath}?filter=${id}`}
+            href={`/?filter=${id}`}
             className={cx(
               "rounded-lg border border-line px-3 py-2 text-[13px] font-semibold no-underline",
               filter === id
@@ -137,7 +134,7 @@ export function ProductList({
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <form
-          action={basePath}
+          action="/"
           method="get"
           className="flex min-w-0 flex-1 flex-wrap gap-2 sm:flex-nowrap"
         >
@@ -166,7 +163,7 @@ export function ProductList({
       </div>
 
       <p className={cx(ui.small, "mb-4")}>
-        Showing {visible.length} {kind.toLowerCase()}
+        Showing {visible.length} product
         {visible.length === 1 ? "" : "s"}
       </p>
 
@@ -178,7 +175,7 @@ export function ProductList({
         </section>
       ) : (
         <div className={ui.empty}>
-          No matching items. Add a {kind.toLowerCase()} or change the filter.
+          No matching products. Add a product or change the filter.
         </div>
       )}
     </>

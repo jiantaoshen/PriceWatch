@@ -15,7 +15,6 @@
 | 路径 | 用途 | SQLite |
 | --- | --- | --- |
 | `/` | Products、搜索、状态过滤、商品卡片 | `tracked_items`, `item_sources`, `price_history` |
-| `/subscriptions` | Subscriptions 的同款卡片 | 同上 |
 | `/items/new` | 添加商品或订阅 | `tracked_items` |
 | `/items/[id]` | 编辑、归档/恢复、来源、手动报价、趋势图 | `tracked_items`, `item_sources`, `price_history`, `best_price_states` |
 | `/runs` | 爬虫运行及单条结果 | `scrape_runs`, `scrape_results` |
@@ -80,7 +79,7 @@ Playwright 抓取相对来源的上次有效（未排除）单位价变化超过
 ## 验收与切换
 
 1. 在独立文件夹解压，本机将现有 SQLite **复制成副本**。不要覆盖原项目。
-2. 运行 `scripts/verify-all.ps1`；确认 Products/Subscriptions、Reviews、Runs、Notifications 和详情页能打开。
+2. 运行 `scripts/verify-all.ps1`；确认 Products、Runs、Notifications 和详情页能打开。
 3. 在副本中试做新增商品、改目标价、录入手工价格、归档/恢复，刷新后确认数据仍在。
 4. 打开 `/notifications`，使用测试按钮确认当前交互式桌面能出现本地通知。
 5. 在副本中手动执行一次 Python 爬虫，核对 `/runs` 和价格历史，再观察是否生成符合条件的提醒。
