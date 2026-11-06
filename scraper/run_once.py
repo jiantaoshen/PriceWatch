@@ -72,8 +72,9 @@ def main():
                 with db:
                     status = save_result(db,run_id,job,result)
                     counts[status] += 1
-            state = "Success" if counts["Success"] == len(jobs) else (
-                "Partial" if counts["Success"] else "Failed")
+            accepted = counts["Success"] + counts["Suspicious"]
+            state = "Success" if accepted == len(jobs) else (
+                "Partial" if accepted else "Failed")
             with db:
                 db.execute("""UPDATE scrape_runs SET finished_at=?,status=?,successful=?,
                   failed=?,suspicious=? WHERE id=?""",

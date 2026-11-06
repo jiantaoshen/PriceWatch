@@ -18,7 +18,6 @@
 | `/subscriptions` | Subscriptions 的同款卡片 | 同上 |
 | `/items/new` | 添加商品或订阅 | `tracked_items` |
 | `/items/[id]` | 编辑、归档/恢复、来源、手动报价、趋势图 | `tracked_items`, `item_sources`, `price_history`, `best_price_states` |
-| `/reviews` | 查看/批准/拒绝可疑报价 | `scrape_results`, `price_history`, `best_price_states` |
 | `/runs` | 爬虫运行及单条结果 | `scrape_runs`, `scrape_results` |
 | `/notifications` | Windows 本地通知测试、已有目标价提醒记录 | `price_alert_events` |
 | `/schedule` | 显示 Windows 计划任务状态，并从页面安装/调整每日或每周任务、手动运行/停止/启停/删除 | 不直接读写 SQLite；调度信息来自 Windows |
@@ -31,7 +30,7 @@ components/          原设计风格的导航、商品卡片、筛选、价格�
 lib/db.ts            SQLite 打开、事务、参数化查询
 lib/queries.ts       页面只读查询
 lib/write-*.ts       商品、来源、报价变更
-lib/reviews.ts       可疑价格的审核逻辑
+lib/price-exclusions.ts   可疑报价软删除并回算最低价
 lib/alerts.ts       价格提醒事件历史查询
 scraper/run_once.py  独立爬虫入口
 scraper/price_store.py 结果保存与最低价更新
@@ -49,11 +48,12 @@ scripts/             数据健康检查和 Windows 一键测试
 - 爬虫写入同一数据库，使用独立文件锁并设置锁等待；不启用 WAL。
 - 迁移快照 `migration_audit` 只代表导出时的数据校验，业务变动后不会更新。
 - 对价格的单位处理沿用现有 `comparison_quantity` 和 `default_quantity`。
-- 归档来源不参与最低价；恢复商品后追踪保持关闭。
+- 归档来源不参与最低价；恢复商品后追踪保持关闭。归档来源可从详情页恢复，恢复时自动抓取保持关闭，需单独启用。
+- 不新增表或列；沿用 `scrape_results.review_status='Rejected'` 和 `reviewed_at` 标记软删除，价格历史行及既有提醒事件保留。
 
 ## 可疑价格处理
 
-Playwright 抓取相对来源的上次单位价变化超过 80% 时，结果为 `Suspicious`，不会直接进入价格历史。`Reviews` 标签将这类 `Pending` 结果列出；审批时插入 `price_history` 并更新 `best_price_states`，拒绝时只保存审核状态。失败的抓取不会写入价格。
+Playwright 抓取相对来源的上次有效（未排除）单位价变化超过 80% 时，结果为 `Suspicious`。只要价格可用且大于零，直接保存到 `price_history`，参与当前最低价计算，并可能按原规则触发 Windows 目标价通知。详情页显示 `Suspicious` 标识，用户可以单击 `Delete` 软删除；软删除仅设置原 `scrape_results` 的 `review_status='Rejected'` 和 `reviewed_at`，不物理删价、不撤回提醒、不触发新提醒。来源最新价、最低价查询、价格走势图均排除标记为 `Rejected` 的记录；此前未审批的老数据仍留在 `scrape_results`，不自动追溯采纳。纯抓取失败及非法价格只记在运行记录，不进入价格历史；手动录价可选。
 
 ## Windows 桌面通知（替换邮件通道）
 
@@ -70,7 +70,7 @@ Playwright 抓取相对来源的上次单位价变化超过 80% 时，结果为 
 ## 安全和限制
 
 - 服务仅绑定 `127.0.0.1`，没有公共认证；禁止转发到互联网。
-- 旧版 React 界面是按源代码复现的结构与风格，不依赖 Tailwind、shadcn 或 MSAL；个别页面布局和细节不会逐像素相同。
+- 网页样式已迁移到 Tailwind CSS 4；`app/globals.css` 管理主题变量、`lib/ui.ts` 统一可复用工具类，TSX 使用清晰的多行 JSX。未引入 shadcn 或 MSAL，个别页面布局和细节不会逐像素相同。
 - Windows 通知需要交互式 Windows 会话；勿扰模式可能抑制横幅，成功提交不代表用户一定看见。
 - Python 爬虫对 HTTP(S) 全部请求及自动重定向逐跳做公网校验，通过 APIRequestContext `max_redirects=0` 手工处理；关闭 Service Workers、WebSockets、下载，按商品新建浏览器 context，并限制资源数/跳转数/大小。DNS 检查与真实连接之间仍存在竞态，不等于 OS 层的隔离。
 - Windows 通知测试要求 Next.js 运行环境能找到 Python（可用 `PRICEWATCH_PYTHON` 指定），不新增依赖。
@@ -94,3 +94,11 @@ Playwright 抓取相对来源的上次单位价变化超过 80% 时，结果为 
 - `components/scheduler-control.tsx` 每五秒刷新状态并支持安装、更新、运行、停止、启停和删除。由于调度程序只负责触发，不能保证所有商品均成功。
 - SQLite 仍由 Python 抓取进程写入，网页不会直接启动 Playwright 或创建其他后台进程。Python 文件锁防止网站按钮、计划运行和 CLI 并行抓取。
 - 默认用户必须处于已登录状态；如果需要注销后运行，应单独变更 Windows 任务的安全上下文。
+
+
+## Tailwind CSS 与代码可读性重构
+
+- 原有 5 个 `app/classic-*.css` 文件已移除，使用 Tailwind 4 + `@tailwindcss/postcss`。
+- `components/page-heading.tsx` 复用页眉，`lib/ui.ts` 复用输入框、按钮、表格、状态标签等工具类，仍可在组件中直接写局部 Tailwind 类。
+- 各 Next.js 页面、Scheduler 客户端组件，以及常用 TypeScript 数据层文件已分行整理。业务判定与接口约束保持原样。
+- 当前离线环境无法从 npm 获取新依赖，因此不能在此完成 Next.js build；请在 Windows 上运行 `npm install`，再运行 `scripts/verify-all.ps1` 进行最终验证。

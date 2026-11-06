@@ -1,6 +1,29 @@
-/* Classic PriceWatch: no Tailwind, shadcn, or remote stylesheets. */
-@import "./classic-base.css";
-@import "./classic-layout.css";
-@import "./classic-controls.css";
-@import "./classic-products.css";
-@import "./classic-metrics.css";
+/* Tailwind CSS 4: design tokens are shared by all Next.js pages. */
+@import "tailwindcss";
+
+/* Explicit source paths keep shared class strings discoverable in Tailwind v4. */
+@source "../app";
+@source "../components";
+@source "../lib";
+
+@theme {
+  --color-ink: #182033;
+  --color-muted: #5f6c84;
+  --color-surface: #fafbfd;
+  --color-soft: #f4f7fb;
+  --color-line: #dce8f5;
+  --color-brand: #5576a3;
+  --color-brand-dark: #45658d;
+  --color-price-good: #15803d;
+  --font-sans: Arial, "Microsoft YaHei", sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply min-h-screen bg-surface text-ink antialiased;
+  }
+}

@@ -97,6 +97,33 @@ class WindowsAlertTests(TestCase):
         self.assertEqual(deliver.call_count, 2)
 
     @patch("windows_alerts.deliver")
+    def test_suspicious_below_target_price_still_notifies_once(self, deliver):
+        from price_store import save_result
+        self.db.execute("UPDATE tracked_items SET target_unit_price='2.000000' WHERE id='item1'")
+        self.db.execute("""INSERT INTO scrape_runs(id,started_at,status,total_items,successful,failed,suspicious)
+            VALUES ('run2','now','Running',1,0,0,0)""")
+        job = {"item_id": "item1", "source_id": 1, "default_quantity": "1"}
+        with self.db:
+            self.assertEqual(save_result(self.db, "run2", job,
+                {"ok": True, "price": 1.5, "observed_at": "2026-11-02T12:00:00+00:00"}), "Suspicious")
+        self.assertEqual(send_alerts(self.db, "2026-11-02T00:00:00+00:00"), 1)
+        self.assertEqual(send_alerts(self.db, "2026-11-02T00:00:00+00:00"), 0)
+        deliver.assert_called_once()
+
+    @patch("windows_alerts.deliver")
+    def test_excluding_only_price_never_sends_alert(self, deliver):
+        # A deletion during a running scan must not notify from the old snapshot.
+        self.db.execute("UPDATE tracked_items SET current_unit_price=NULL WHERE id='item1'")
+        self.assertEqual(send_alerts(self.db, self.START), 0)
+        deliver.assert_not_called()
+
+    @patch("windows_alerts.deliver")
+    def test_recalculation_snapshot_does_not_send_alert(self, deliver):
+        self.db.execute("UPDATE best_price_states SET cause='PriceExcluded'")
+        self.assertEqual(send_alerts(self.db, self.START), 0)
+        deliver.assert_not_called()
+
+    @patch("windows_alerts.deliver")
     def test_legacy_email_settings_not_required(self, deliver):
         self.assertFalse(self.db.execute("SELECT name FROM sqlite_master WHERE name='local_email_settings'").fetchone())
         self.assertEqual(send_alerts(self.db, self.START), 1)

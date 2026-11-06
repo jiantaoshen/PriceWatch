@@ -1,24 +1,66 @@
 "use client";
-// Keep the original top navigation, now linking public and private local tabs.
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { cx } from "../lib/ui";
+
 const tabs = [
   { href: "/", title: "Products" },
   { href: "/subscriptions", title: "Subscriptions" },
-  { href: "/reviews", title: "Reviews" },
   { href: "/runs", title: "Scrape runs" },
   { href: "/notifications", title: "Notifications" },
   { href: "/schedule", title: "Schedule" },
 ];
+
+const navLink =
+  "inline-flex shrink-0 items-center rounded-lg px-3 py-2.5 text-sm " +
+  "font-semibold no-underline transition-colors hover:bg-soft hover:text-ink";
+
 export function SiteHeader() {
-  const current = usePathname();
-  return <header className="site-header"><div className="header-inner">
-    <Link className="brand" href="/">PriceWatch</Link>
-    <nav className="top-nav" aria-label="Main navigation">
-      {tabs.map(t => {
-        const active = t.href === "/" ? current === "/" || current.startsWith("/items") : current.startsWith(t.href);
-        return <Link key={t.href} href={t.href} aria-current={active ? "page" : undefined}>{t.title}</Link>;
-      })}
-    </nav><span className="local-badge">Local · SQLite</span>
-  </div></header>;
+  const pathname = usePathname();
+
+  return (
+    <header className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur-sm">
+      <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-6">
+        <Link
+          href="/"
+          className="shrink-0 text-[17px] font-bold tracking-tight text-ink no-underline"
+        >
+          PriceWatch
+        </Link>
+
+        <nav
+          aria-label="Main navigation"
+          className="order-3 flex w-full items-center gap-1 overflow-x-auto md:order-none md:w-auto"
+        >
+          {tabs.map((tab) => {
+            const active =
+              tab.href === "/"
+                ? pathname === "/" || pathname.startsWith("/items")
+                : pathname.startsWith(tab.href);
+
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                aria-current={active ? "page" : undefined}
+                className={cx(
+                  navLink,
+                  active
+                    ? "bg-[#f0f4f9] text-ink"
+                    : "text-muted",
+                )}
+              >
+                {tab.title}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <span className="shrink-0 rounded-lg border border-line bg-[#edf4fc] px-2.5 py-1.5 text-xs font-semibold text-brand">
+          Local · SQLite
+        </span>
+      </div>
+    </header>
+  );
 }

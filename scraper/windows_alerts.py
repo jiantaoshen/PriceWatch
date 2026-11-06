@@ -54,8 +54,12 @@ def send_alerts(db, started):
     """
     rows = db.execute("""SELECT b.id AS state_id,b.item_id,b.unit_price,i.name,i.target_unit_price,
         i.currency,i.unit FROM best_price_states b JOIN tracked_items i ON i.id=b.item_id
-        WHERE b.recorded_at >= ? AND i.archived_at IS NULL AND i.tracking_enabled=1
-          AND i.target_unit_price IS NOT NULL AND CAST(b.unit_price AS REAL)<=CAST(i.target_unit_price AS REAL)
+        WHERE b.recorded_at >= ? AND b.cause='Automatic'
+          AND i.archived_at IS NULL AND i.tracking_enabled=1
+          AND i.current_unit_price IS NOT NULL
+          AND CAST(i.current_unit_price AS REAL)=CAST(b.unit_price AS REAL)
+          AND i.target_unit_price IS NOT NULL
+          AND CAST(b.unit_price AS REAL)<=CAST(i.target_unit_price AS REAL)
           AND b.id=(SELECT MAX(id) FROM best_price_states WHERE item_id=i.id)""", (started,)).fetchall()
     pending = []
     for row in rows:
