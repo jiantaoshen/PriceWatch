@@ -1,15 +1,18 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$PythonPath
+    [string]$PythonPath,
+    [string]$DatabasePath = ''
 )
-# Task Scheduler entrypoint: run the working Python crawler and retain its exit code.
+# Fixed Task Scheduler entrypoint. Keep independent of the web server and retain exit codes.
 $ErrorActionPreference = 'Stop'
-$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$dbPath = Join-Path $root 'data\pricewatch.sqlite3'
+$root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+if (-not $DatabasePath) { $DatabasePath = Join-Path $root 'data\pricewatch.sqlite3' }
+if (-not [IO.Path]::IsPathRooted($DatabasePath)) { $DatabasePath = Join-Path $root $DatabasePath }
+$dbPath = [IO.Path]::GetFullPath($DatabasePath)
 $scriptPath = Join-Path $root 'scraper\run_once.py'
 $logDir = Join-Path $root 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$now = Get-Date -Format 'yyyyMMdd-HHmmss'
+$now = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $outLog = Join-Path $logDir "scrape-$now.stdout.log"
 $errLog = Join-Path $logDir "scrape-$now.stderr.log"
 $summaryLog = Join-Path $logDir 'scheduler.log'
@@ -23,15 +26,14 @@ try {
     }
     $env:PRICEWATCH_SQLITE_PATH = $dbPath
     $arguments = '"{0}"' -f $scriptPath
-    Add-Content -Path $summaryLog -Value "$(Get-Date -Format o) Started"
+    Add-Content -LiteralPath $summaryLog -Value "$(Get-Date -Format o) Started"
     $process = Start-Process -FilePath $PythonPath -ArgumentList $arguments `
         -WorkingDirectory $root -PassThru -Wait `
         -RedirectStandardOutput $outLog -RedirectStandardError $errLog
     $code = $process.ExitCode
-    Add-Content -Path $summaryLog -Value "$(Get-Date -Format o) Finished exit=$code"
+    Add-Content -LiteralPath $summaryLog -Value "$(Get-Date -Format o) Finished exit=$code"
     exit $code
-}
-catch {
-    Add-Content -Path $summaryLog -Value "$(Get-Date -Format o) Error: $($_.Exception.Message)"
+} catch {
+    Add-Content -LiteralPath $summaryLog -Value "$(Get-Date -Format o) Error: $($_.Exception.Message)"
     exit 2
 }

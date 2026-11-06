@@ -1,4 +1,9 @@
-"""Write scraped prices and maintain the best-price tables in migrated SQLite."""
+"""Persist valid scraped prices, flag anomalies, and maintain active best offers.
+
+A suspicious result is an accepted observation; it is never held for approval.
+The existing scrape_results.review_status = 'Rejected' flag implements auditable
+schema-free soft deletion for suspect price_history entries.
+"""
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -20,9 +25,15 @@ def best_for_item(db, item_id, when):
     item = db.execute("SELECT * FROM tracked_items WHERE id=?", (item_id,)).fetchone()
     rows = db.execute("""SELECT s.id,p.price,p.quantity,p.unit_price FROM item_sources s
         JOIN price_history p ON p.id=(SELECT h.id FROM price_history h
-            WHERE h.source_id=s.id ORDER BY h.recorded_at DESC,h.id DESC LIMIT 1)
+            LEFT JOIN scrape_results r ON r.id=h.scrape_result_id
+            WHERE h.source_id=s.id
+              AND COALESCE(r.review_status, '') != 'Rejected'
+            ORDER BY h.recorded_at DESC,h.id DESC LIMIT 1)
         WHERE s.item_id=? AND s.archived_at IS NULL""", (item_id,)).fetchall()
     if not rows:
+        db.execute("""UPDATE tracked_items SET current_price=NULL,
+          current_quantity=NULL,current_unit_price=NULL,updated_at=? WHERE id=?""",
+          (when, item_id))
         return
     unit = min(Decimal(row["unit_price"]) for row in rows)
     best = [row for row in rows if Decimal(row["unit_price"]) == unit]
@@ -52,7 +63,7 @@ def best_for_item(db, item_id, when):
 
 
 def save_result(db, run_id, job, result):
-    """Validate one offer, log the result, and accept only plausible prices."""
+    """Accept valid prices, including outliers; preserve the suspicious flag."""
     when = result.get("observed_at") or now()
     item_id, source_id = job["item_id"], job["source_id"]
     error, reason, price = None, None, None
@@ -60,16 +71,20 @@ def save_result(db, run_id, job, result):
         if not result.get("ok"):
             raise ValueError(result.get("error") or "Scraper returned no price")
         price = Decimal(decimal(result["price"]))
+        if price <= 0:
+            raise ValueError("Scraped price must be greater than zero")
     except (ValueError, InvalidOperation, TypeError, KeyError) as exc:
         error = str(exc)[:1000]
     quantity = Decimal(job["default_quantity"])
     unit = price / quantity if price is not None and quantity > 0 else None
-    prior = db.execute("""SELECT unit_price FROM price_history WHERE source_id=?
-        ORDER BY recorded_at DESC,id DESC LIMIT 1""", (source_id,)).fetchone()
+    prior = db.execute("""SELECT p.unit_price FROM price_history p
+        LEFT JOIN scrape_results r ON r.id=p.scrape_result_id
+        WHERE p.source_id=? AND COALESCE(r.review_status, '') != 'Rejected'
+        ORDER BY p.recorded_at DESC,p.id DESC LIMIT 1""", (source_id,)).fetchone()
     if unit is not None and prior and Decimal(prior[0]) > 0:
         ratio = abs(unit / Decimal(prior[0]) - 1)
         if ratio > Decimal("0.80"):
-            reason = f"Price changed by {ratio:.0%}; manual review required"
+            reason = f"Price changed by {ratio:.0%}; saved as suspicious"
     status = "Failed" if error else "Suspicious" if reason else "Success"
     quantity_str = decimal(quantity)
     cur = db.execute("""INSERT INTO scrape_results(run_id,item_id,source_id,scraped_price,
@@ -77,8 +92,8 @@ def save_result(db, run_id, job, result):
       review_status,observed_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
       (run_id,item_id,source_id,decimal(price) if price is not None else None,
        quantity_str if price is not None else None,decimal(unit,6) if unit is not None else None,
-       status,error,reason,"NotRequired" if status == "Success" else "Pending",when,now()))
-    if status == "Success":
+       status,error,reason,"NotRequired",when,now()))
+    if status != "Failed":
         db.execute("""INSERT INTO price_history(item_id,source_id,scrape_result_id,
           price,quantity,unit_price,origin,recorded_at) VALUES (?,?,?,?,?,?,?,?)""",
           (item_id,source_id,cur.lastrowid,decimal(price),quantity_str,decimal(unit,6),"Scrape",when))

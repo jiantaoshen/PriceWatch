@@ -1,73 +1,249 @@
-// Local-only API: inspect or start one fixed Windows Task Scheduler task.
+/**
+ * Loopback-only HTTP API for the single PriceWatch Windows scheduled task.
+ * Never accept executable paths, task names or arbitrary PowerShell commands.
+ */
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const run = promisify(execFile);
-const taskName = "PriceWatchLocalScraper";
 
-function allowedHost(request: Request): boolean {
-  const host = new URL(request.url).hostname.toLowerCase();
-  return host === "127.0.0.1" || host === "localhost";
+const exec = promisify(execFile);
+const script = path.resolve(process.cwd(), "scripts", "manage-scheduler.ps1");
+const validOperations = new Set([
+  "save",
+  "run",
+  "stop",
+  "enable",
+  "disable",
+  "remove",
+]);
+const validDays = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+const responseHeaders = {
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
+};
+
+type ScheduleCommand = {
+  operation: string;
+  at?: string;
+  frequency?: string;
+  days?: string[];
+};
+
+function json(data: unknown, status = 200): Response {
+  return Response.json(data, { status, headers: responseHeaders });
 }
 
-function blocked(request: Request, write: boolean): Response | undefined {
-  if (!allowedHost(request)) {
-    return Response.json({ error: "Local access only" }, { status: 403 });
+/** Reject remote hosts, proxies and unexpected cross-site mutations. */
+function localHost(value: string | null): boolean {
+  if (
+    !value ||
+    value.includes(",") ||
+    value.includes("/") ||
+    value.includes("@") ||
+    value.includes("\\") ||
+    /\s/.test(value)
+  ) {
+    return false;
   }
+
+  try {
+    const hostname = new URL(`http://${value}`).hostname.toLowerCase();
+    return hostname === "127.0.0.1" || hostname === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+function blocked(request: Request, write: boolean): Response | null {
+  const host = request.headers.get("host");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+
+  if (
+    !localHost(host) ||
+    !localHost(new URL(request.url).host) ||
+    (forwardedHost !== null &&
+      forwardedHost.toLowerCase() !== host?.toLowerCase())
+  ) {
+    return json({ error: "This app can only be controlled on localhost." }, 403);
+  }
+
   if (process.platform !== "win32") {
-    return Response.json({ error: "Windows Task Scheduler required" }, { status: 501 });
+    return json({ error: "Windows Task Scheduler is only available on Windows." }, 501);
   }
+
   if (write) {
-    // Reject cross-site requests: this route can start a local OS task.
     const origin = request.headers.get("origin");
-    if (origin !== new URL(request.url).origin) {
-      return Response.json({ error: "Forbidden origin" }, { status: 403 });
+    const expected = `http://${host}`;
+    const fetchSite = request.headers.get("sec-fetch-site");
+
+    if (
+      origin !== expected ||
+      (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none")
+    ) {
+      return json({ error: "Cross-origin scheduler operations are blocked." }, 403);
     }
   }
+
+  return null;
 }
 
-const inspect = String.raw`
-$ErrorActionPreference = 'Stop'
-$t = Get-ScheduledTask -TaskPath '\' -TaskName 'PriceWatchLocalScraper' -ErrorAction SilentlyContinue
-if (-not $t) { '{"installed":false}'; exit 0 }
-$i = Get-ScheduledTaskInfo -InputObject $t
-[pscustomobject]@{
-  installed = $true
-  state = [string]$t.State
-  nextRun = $i.NextRunTime.ToString('o')
-  lastRun = $i.LastRunTime.ToString('o')
-  lastResult = [int]$i.LastTaskResult
-} | ConvertTo-Json -Compress
-`;
+/** Execute the one fixed PowerShell helper and parse its structured JSON. */
+async function invoke(args: string[]): Promise<Response> {
+  const powershell = path.join(
+    process.env.SystemRoot || "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
 
-export async function GET(request: Request) {
-  const denied = blocked(request, false);
-  if (denied) return denied;
   try {
-    const { stdout } = await run("powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", inspect],
-      { windowsHide: true, timeout: 15000 });
-    return Response.json(JSON.parse(stdout.trim()),
-      { headers: { "Cache-Control": "no-store" } });
+    const { stdout } = await exec(
+      powershell,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        script,
+        ...args,
+      ],
+      {
+        cwd: process.cwd(),
+        windowsHide: true,
+        timeout: 30_000,
+        maxBuffer: 256 * 1024,
+      },
+    );
+
+    const result: unknown = JSON.parse(stdout.trim());
+    if (
+      !result ||
+      typeof result !== "object" ||
+      Array.isArray(result) ||
+      typeof (result as { installed?: unknown }).installed !== "boolean"
+    ) {
+      throw new Error("Unexpected Windows Task Scheduler response");
+    }
+
+    return json(result);
   } catch (error) {
-    console.error("Scheduler status error:", error);
-    return Response.json({ error: "Cannot read scheduled task" }, { status: 500 });
+    const details = error as {
+      stderr?: string;
+      killed?: boolean;
+      code?: unknown;
+      message?: string;
+    };
+    console.error("Scheduler operation failed:", details.message);
+
+    const stderr =
+      typeof details.stderr === "string" ? details.stderr.trim() : "";
+    const message = stderr
+      ? stderr.split(/\r?\n/).filter(Boolean).slice(-1)[0].slice(0, 400)
+      : details.killed
+        ? "Windows Task Scheduler did not respond in time."
+        : "Scheduler operation failed. Check Windows permissions, Python and the database.";
+
+    return json({ error: message }, 500);
   }
 }
 
-export async function POST(request: Request) {
+export async function GET(request: Request): Promise<Response> {
+  const denied = blocked(request, false);
+  return denied || invoke(["-Operation", "status"]);
+}
+
+export async function POST(request: Request): Promise<Response> {
   const denied = blocked(request, true);
   if (denied) return denied;
-  try {
-    // No shell and no user-controlled command arguments.
-    await run("schtasks.exe", ["/Run", "/TN", `\\${taskName}`],
-      { windowsHide: true, timeout: 15000 });
-    return Response.json({ ok: true, message: "Run requested" });
-  } catch (error) {
-    console.error("Scheduler launch error:", error);
-    return Response.json({ error: "Failed to start task. Check that it is installed." },
-      { status: 500 });
+
+  if (
+    !request.headers.get("content-type")?.toLowerCase().startsWith("application/json")
+  ) {
+    return json({ error: "Expected JSON request." }, 415);
   }
+
+  const length = Number(request.headers.get("content-length") ?? 0);
+  if (!Number.isFinite(length) || length > 2_048) {
+    return json({ error: "Request too large." }, 413);
+  }
+
+  let command: ScheduleCommand;
+  try {
+    const raw = await request.text();
+    if (raw.length > 2_048) {
+      return json({ error: "Request too large." }, 413);
+    }
+
+    const body: unknown = JSON.parse(raw);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new Error("Invalid payload");
+    }
+
+    command = body as ScheduleCommand;
+  } catch {
+    return json({ error: "Invalid JSON body." }, 400);
+  }
+
+  if (
+    typeof command.operation !== "string" ||
+    !validOperations.has(command.operation)
+  ) {
+    return json({ error: "Unknown scheduler operation." }, 400);
+  }
+
+  const keys = Object.keys(command);
+  if (keys.some((key) => !["operation", "at", "frequency", "days"].includes(key))) {
+    return json({ error: "Unsupported scheduler setting." }, 400);
+  }
+
+  if (command.operation !== "save") {
+    if (keys.length !== 1) {
+      return json({ error: "Unexpected operation parameters." }, 400);
+    }
+    return invoke(["-Operation", command.operation]);
+  }
+
+  if (
+    typeof command.at !== "string" ||
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(command.at) ||
+    (command.frequency !== "daily" && command.frequency !== "weekly")
+  ) {
+    return json({ error: "Select a valid time and recurrence." }, 400);
+  }
+
+  if (
+    !Array.isArray(command.days) ||
+    !command.days.every((day): day is string => typeof day === "string") ||
+    command.days.length > 7 ||
+    (command.frequency === "weekly" && command.days.length === 0) ||
+    new Set(command.days).size !== command.days.length ||
+    command.days.some((day) => !validDays.includes(day as (typeof validDays)[number]))
+  ) {
+    return json({ error: "Choose valid weekdays." }, 400);
+  }
+
+  return invoke([
+    "-Operation",
+    "save",
+    "-At",
+    command.at,
+    "-Frequency",
+    command.frequency,
+    "-Days",
+    command.days[0] ? command.days.join(",") : "Monday",
+  ]);
 }

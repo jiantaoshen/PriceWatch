@@ -1,16 +1,32 @@
-// Scheduler tab: preserve Classic UI and show live Windows task controls.
+import { PageHeading } from "../../components/page-heading";
 import { SchedulerControl } from "../../components/scheduler-control";
+import { ui } from "../../lib/ui";
 
 export default function Schedule() {
-  return <>
-    <div className="heading"><div><h1>Schedule</h1>
-      <p className="subheading">Manage local scraper runs without opening another site.</p>
-    </div></div>
-    <SchedulerControl />
-    <section className="panel"><h2>Independent crawler</h2>
-      <p>The Windows task starts <code>scraper/run_once.py</code> using the project's SQLite file.</p>
-      <p className="muted small">The scheduled task keeps working while this website is closed. The task runs under your Windows user, so that user must be signed in with the default setup.</p>
-      <p className="muted small">To install or change the daily time, use <code>scripts/install-scheduler.ps1</code>. For detailed prices and failed stores, visit Scrape runs.</p>
-    </section>
-  </>;
+  return (
+    <>
+      <PageHeading
+        title="Schedule"
+        description="Install and manage Windows Task Scheduler from the website. No manual PowerShell commands required."
+      />
+
+      <SchedulerControl />
+
+      <section className={ui.panel}>
+        <h2 className={ui.sectionTitle}>Independent crawler</h2>
+        <p className="mb-2 text-sm leading-6">
+          The Windows task launches{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">
+            scraper/run_once.py
+          </code>{" "}
+          using the same SQLite database as the website.
+        </p>
+        <p className={ui.small}>
+          The site may be closed while scraping runs. With the default task
+          settings, your Windows user must be signed in. Windows controls task
+          timing and missed runs.
+        </p>
+      </section>
+    </>
+  );
 }
