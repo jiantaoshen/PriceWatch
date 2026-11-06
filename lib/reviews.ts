@@ -13,7 +13,8 @@ export function resolveReview(id:number,decision:"Approved"|"Rejected") {
   if(!Number.isSafeInteger(id)||id<=0) throw Error("Invalid review ID");
   withDb(db=>transaction(db,()=>{
     const row=one(db,`SELECT r.* FROM scrape_results r JOIN item_sources s ON s.id=r.source_id
-      WHERE r.id=? AND r.result_status='Suspicious' AND r.review_status='Pending' AND s.archived_at IS NULL`,id);
+      JOIN tracked_items i ON i.id=r.item_id
+      WHERE r.id=? AND i.archived_at IS NULL AND r.result_status='Suspicious' AND r.review_status='Pending' AND s.archived_at IS NULL`,id);
     if(!row) throw Error("Review missing or already resolved");
     const now=new Date().toISOString();
     if(decision==="Approved") {

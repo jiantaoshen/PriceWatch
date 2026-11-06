@@ -57,6 +57,11 @@ def _is_public_ip(address: str) -> bool:
 
 def parse_public_http_target(url: str) -> PublicHttpTarget:
     """Validate URL syntax and reject obvious local/private targets before DNS."""
+    if (not isinstance(url, str) or not url or any(
+        ord(character) < 0x20 or ord(character) == 0x7F or character == "\\"
+        for character in url
+    )):
+        raise UnsafeNetworkTargetError("Target URL contains unsafe characters.")
     try:
         parsed = urlsplit(url)
     except ValueError as error:

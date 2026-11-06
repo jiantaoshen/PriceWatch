@@ -4,8 +4,12 @@ import os
 from pathlib import Path
 import sqlite3
 import smtplib
+import ssl
 import sys
 from price_store import now
+from pricewatch.dpapi_secrets import (
+    is_protected, migrate_legacy_password, unprotect_password,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -15,6 +19,9 @@ def config(db):
     table = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='local_email_settings'").fetchone()
     if not table:
         return None
+    # Older app releases stored the password as plaintext. Migrate it before
+    # the scheduler reads it, even when the website has not been opened.
+    migrate_legacy_password(db)
     row = db.execute("SELECT * FROM local_email_settings WHERE id=1").fetchone()
     return dict(row) if row else None
 
@@ -31,14 +38,27 @@ def deliver(settings, subject, body):
     msg["To"] = settings["to_address"]
     msg.set_content(body)
     secure = bool(settings["use_tls"])
-    connection = smtplib.SMTP_SSL(host, port, timeout=25) if secure and port == 465 else smtplib.SMTP(host, port, timeout=25)
+    # Explicit verified TLS context: the library default is not guaranteed to
+    # verify the SMTP server certificate on every supported Python release.
+    tls_context = ssl.create_default_context()
+    password = None
+    if settings["username"]:
+        if not secure:
+            raise ValueError("TLS must be enabled before SMTP authentication")
+        stored = settings["password"]
+        if not stored:
+            raise ValueError("SMTP password is not configured")
+        # config() already migrated legacy database values. Tests may inject
+        # a plaintext password directly without opening a database.
+        password = unprotect_password(stored) if is_protected(stored) else stored
+    connection = (smtplib.SMTP_SSL(host, port, timeout=25, context=tls_context)
+                  if secure and port == 465 else smtplib.SMTP(host, port, timeout=25))
     with connection as server:
         if secure and port != 465:
-            server.starttls()
-        if settings["username"]:
-            if not secure:
-                raise ValueError("TLS must be enabled before SMTP authentication")
-            server.login(settings["username"], settings["password"])
+            server.starttls(context=tls_context)
+            server.ehlo()
+        if password is not None:
+            server.login(settings["username"], password)
         server.send_message(msg)
 
 

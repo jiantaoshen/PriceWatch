@@ -11,8 +11,9 @@ export function required(value: FormDataEntryValue | null, max = 500): string {
 
 export function positive(value: FormDataEntryValue | null, fallback: number): number {
   const number = Number(value ?? fallback);
-  if (!Number.isFinite(number) || number <= 0) throw new Error("Quantity must be positive.");
-  return number;
+  if (!Number.isFinite(number) || number < 0.0001 || number > 10000000 ||
+      Number(number.toFixed(4)) === 0) throw new Error("Quantity must be between 0.0001 and 10,000,000.");
+  return Number(number.toFixed(4));
 }
 
 export function optionalPrice(value: FormDataEntryValue | null): string | null {
@@ -27,7 +28,9 @@ export function saveItem(form: FormData, itemId?: string) {
   const name = required(form.get("name"));
   const itemType = form.get("item_type") === "Subscription" ? "Subscription" : "Product";
   const currency = required(form.get("currency"), 3).toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Currency must be a three-letter code.");
   const unit = String(form.get("unit") || "").trim() || null;
+  if (unit && unit.length > 80) throw new Error("Unit is too long.");
   const quantity = positive(form.get("comparison_quantity"), 1);
   const target = optionalPrice(form.get("target_price"));
   const targetUnit = target === null ? null : (Number(target) / quantity).toFixed(6);
@@ -61,15 +64,26 @@ export function addSource(form: FormData) {
   const itemId = required(form.get("item_id"), 40);
   const store = required(form.get("store"), 200);
   const rawUrl = String(form.get("url") || "").trim();
-  if (rawUrl && !/^https?:\/\//i.test(rawUrl)) throw new Error("Source URL must use HTTP(S).");
+  if (rawUrl) {
+    if (rawUrl.length > 2048 || /[\u0000-\u001f\u007f]/.test(rawUrl)) throw new Error("Invalid source URL.");
+    let parsed: URL;
+    try { parsed = new URL(rawUrl); } catch { throw new Error("Invalid source URL."); }
+    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname ||
+        parsed.username || parsed.password ||
+        (parsed.port && parsed.port !== (parsed.protocol === "https:" ? "443" : "80"))) {
+      throw new Error("Source URLs must use public HTTP(S) without credentials or custom ports.");
+    }
+  }
   const quantity = positive(form.get("default_quantity"), 1).toFixed(4);
   const enabled = rawUrl && form.get("scraping_enabled") === "on" ? 1 : 0;
+  const note = String(form.get("note") || "").trim() || null;
+  if (note && note.length > 2000) throw new Error("Source note is too long.");
   const now = new Date().toISOString();
   withDb(db => transaction(db, () => {
     db.prepare(`INSERT INTO item_sources
       (item_id,store,url,scraping_enabled,default_quantity,note,created_at,updated_at)
       VALUES (?,?,?,?,?,?,?,?)`).run(itemId,store,rawUrl || null,enabled,quantity,
-      String(form.get("note") || "").trim() || null,now,now);
+      note,now,now);
   }));
   return itemId;
 }

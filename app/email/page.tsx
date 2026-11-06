@@ -26,7 +26,7 @@ export default async function Email({searchParams}:{searchParams:Promise<{messag
         <button type="submit">Save settings</button>
       </form><hr style={{border:0,borderTop:"1px solid var(--border)",margin:"20px 0"}}/>
       <form action={testEmailAction}><button className="button secondary" type="submit">Send test email</button></form>
-      <p className="small muted" style={{marginTop:14}}>SMTP password is stored as plain text in your local SQLite file. Keep database backups private.</p>
+      <p className="small muted" style={{marginTop:14}}>SMTP password is encrypted with Windows DPAPI and bound to your Windows account. Keep old database backups private; the website and scheduled scraper must run as the same Windows user.</p>
     </section><section className="panel"><h2>Recent price alert events</h2><div className="table-wrap"><table>
       <thead><tr><th>Item</th><th>Price / target</th><th>Status</th><th>When</th></tr></thead>
       <tbody>{events.map(e=><tr key={text(e.id)}><td>{e.name||"—"}</td>

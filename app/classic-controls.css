@@ -198,3 +198,10 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+/* Task Scheduler configuration controls. */
+.scheduler-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+.scheduler-weekdays { margin: 0; border: 1px solid var(--border); border-radius: 8px; padding: 12px 15px; }
+.scheduler-weekdays legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.scheduler-day-grid { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+.scheduler-day-grid label { white-space: nowrap; }

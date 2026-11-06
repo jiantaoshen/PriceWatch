@@ -119,3 +119,13 @@ def test_forced_navigation_revalidation_detects_dns_rebinding():
             )
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("url", [
+    "https://example.com\n@127.0.0.1/",
+    "https://example.com\\@127.0.0.1/",
+    "https://example.com\x00/",
+])
+def test_rejects_ambiguous_control_characters(url):
+    with pytest.raises(UnsafeNetworkTargetError):
+        parse_public_http_target(url)
